@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الملفات المؤرشفة | Bola Designs</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v=STATIC_VERSION) }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body data-page="archived-files">
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand"><i class="fas fa-shield-alt"></i><span>Bola Designs</span></div>
+            <nav class="sidebar-nav">
+                <a class="nav-item" href="/admin"><i class="fas fa-home"></i><span>لوحة التحكم</span></a>
+                <a class="nav-item" href="/admin/attendance"><i class="fas fa-calendar-check"></i><span>الحضور والغياب</span></a>
+                <a class="nav-item" href="/admin/files"><i class="fas fa-file-upload"></i><span>إدارة الملفات</span></a>
+                <a class="nav-item" href="/admin/archive"><i class="fas fa-archive"></i><span>المهام المؤرشفة</span></a>
+                <a class="nav-item active" href="/admin/archived-files"><i class="fas fa-folder-open"></i><span>الملفات المؤرشفة</span></a>
+                <a class="nav-item" href="/login" onclick="logout()"><i class="fas fa-sign-out-alt"></i><span>تسجيل الخروج</span></a>
+            </nav>
+        </aside>
+        <main class="content-area">
+            <div class="page-card">
+                <div class="page-header">
+                    <div>
+                        <div class="page-title">الملفات المؤرشفة</div>
+                        <div class="page-subtitle">عرض وتنزيل الملفات التي تم أرشفتها</div>
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name" id="currentUsername"></div>
+                        <div class="user-role">مسؤول النظام</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon"><i class="fas fa-folder-open"></i></div>
+                        <div>
+                            <div class="card-title">قائمة الملفات المؤرشفة</div>
+                            <div class="card-subtitle">الملفات المؤرشفة يدوياً أو آلياً</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px;">
+                        <div></div>
+                        <div>
+                            <a id="exportCsvLink" class="btn-primary" href="/api/files/archived/export">تصدير CSV</a>
+                        </div>
+                    </div>
+                    <div class="items-container" id="archivedFilesList">
+                        <div class="empty-state"><i class="fas fa-spinner fa-pulse"></i><p>جاري تحميل الملفات...</p></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+        const BASE_URL = '/api';
+        async function loadMe() {
+            const res = await fetch(BASE_URL + '/me');
+            if (!res.ok) window.location.href = '/login';
+            const user = await res.json();
+            document.getElementById('currentUsername').textContent = user.username;
+        }
+        async function logout() {
+            await fetch(BASE_URL + '/logout', { method: 'POST' });
+            window.location.href = '/login';
+        }
+        async function loadArchivedFiles() {
+            const res = await fetch(BASE_URL + '/files/archived');
+            const list = document.getElementById('archivedFilesList');
+            if (!res.ok) {
+                list.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>غير مصرح أو حدث خطأ.</p></div>';
+                return;
+            }
+            const files = await res.json();
+            list.innerHTML = files.length ? files.map(f => `
+                <div class="file-card">
+                    <div class="item-info"><div class="item-name">${f.filename}</div><div class="item-desc">${f.uploaded_by || 'غير معروف'} | ${f.uploaded_at || ''}</div></div>
+                    <div class="file-actions">
+                        <a class="btn-link" href="${f.url}" target="_blank">تنزيل</a>
+                        <button class="btn-secondary" onclick="toggleArchive(${f.user_id}, '${encodeURIComponent(f.filename)}', this)">${'إلغاء الأرشفة'}</button>
+                    </div>
+                </div>`).join('') : '<div class="empty-state"><i class="fas fa-folder-open"></i><p>لا توجد ملفات مؤرشفة</p></div>';
+        }
+        async function toggleArchive(userId, fileEnc, btn) {
+            const filename = decodeURIComponent(fileEnc);
+            btn.disabled = true; btn.textContent = 'جارٍ...';
+            try{
+                const res = await fetch(`/api/users/${userId}/files/${filename}/archive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archived: false }) });
+                if (res.ok) {
+                    loadArchivedFiles();
+                } else {
+                    alert('فشل إلغاء الأرشفة');
+                }
+            }catch(e){ alert('خطأ'); }
+            btn.disabled = false;
+        }
+        loadMe().then(loadArchivedFiles);
+    </script>
+</body>
+</html>

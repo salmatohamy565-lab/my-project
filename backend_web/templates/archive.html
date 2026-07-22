@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>المهام المؤرشفة | Bola Designs</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v=STATIC_VERSION) }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body data-page="archive">
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand"><i class="fas fa-shield-alt"></i><span>Bola Designs</span></div>
+            <nav class="sidebar-nav">
+                <a class="nav-item" href="/admin"><i class="fas fa-home"></i><span>لوحة التحكم</span></a>
+                <a class="nav-item" href="/admin/attendance"><i class="fas fa-calendar-check"></i><span>الحضور والغياب</span></a>
+                <a class="nav-item" href="/admin/files"><i class="fas fa-file-upload"></i><span>إدارة الملفات</span></a>
+                <a class="nav-item active" href="/admin/archive"><i class="fas fa-archive"></i><span>المهام المؤرشفة</span></a>
+                <a class="nav-item" href="/login" onclick="logout()"><i class="fas fa-sign-out-alt"></i><span>تسجيل الخروج</span></a>
+            </nav>
+        </aside>
+        <main class="content-area">
+            <div class="page-card">
+                <div class="page-header">
+                    <div>
+                        <div class="page-title">المهام المؤرشفة</div>
+                        <div class="page-subtitle">عرض المهام المكتملة والمنتقلة للأرشيف</div>
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name" id="currentUsername"></div>
+                        <div class="user-role">مسؤول النظام</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon"><i class="fas fa-archive"></i></div>
+                        <div>
+                            <div class="card-title">قائمة المهام المؤرشفة</div>
+                            <div class="card-subtitle">المهام المكتملة التي تم أرشفتها تلقائياً</div>
+                        </div>
+                    </div>
+                    <div class="items-container" id="archivedTasksList">
+                        <div class="empty-state"><i class="fas fa-archive"></i><p>جاري تحميل المهام المؤرشفة...</p></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+        const BASE_URL = '/api';
+        async function loadMe() {
+            const res = await fetch(BASE_URL + '/me');
+            if (!res.ok) window.location.href = '/login';
+            const user = await res.json();
+            document.getElementById('currentUsername').textContent = user.username;
+        }
+        async function logout() {
+            await fetch(BASE_URL + '/logout', { method: 'POST' });
+            window.location.href = '/login';
+        }
+        async function loadArchivedTasks() {
+            const res = await fetch(BASE_URL + '/tasks/archived');
+            const list = document.getElementById('archivedTasksList');
+            if (!res.ok) {
+                list.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>غير مصرح أو حدث خطأ.</p></div>';
+                return;
+            }
+            const tasks = await res.json();
+            list.innerHTML = tasks.length ? tasks.map(t => `
+                <div class="task-card">
+                    <div class="item-info"><div class="item-name">${t.title}</div><div class="item-desc">${t.description || 'بدون وصف'} | ${t.assigned_to_username || 'غير محدد'}</div></div>
+                    <span class="badge badge-done">✓ مؤرشف</span>
+                </div>`).join('') : '<div class="empty-state"><i class="fas fa-archive"></i><p>لا توجد مهام مؤرشفة بعد</p></div>';
+        }
+        loadMe().then(loadArchivedTasks);
+    </script>
+</body>
+</html>

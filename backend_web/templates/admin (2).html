@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة الإدارة | Bola Designs</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body data-page="admin">
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand"><i class="fas fa-shield-alt"></i><span>Bola Designs</span></div>
+            <nav class="sidebar-nav">
+                <a class="nav-item active" href="/admin"><i class="fas fa-home"></i><span>لوحة التحكم</span></a>
+                <a class="nav-item" href="/admin/attendance"><i class="fas fa-calendar-check"></i><span>الحضور والغياب</span></a>
+                <a class="nav-item" href="/admin/files"><i class="fas fa-file-upload"></i><span>إدارة الملفات</span></a>
+                <a class="nav-item" href="/login" onclick="logout()"><i class="fas fa-sign-out-alt"></i><span>تسجيل الخروج</span></a>
+            </nav>
+        </aside>
+        <main class="content-area">
+            <div class="page-card">
+                <div class="page-header">
+                    <div>
+                        <div class="page-title">لوحة الإدارة</div>
+                        <div class="page-subtitle">إدارة الموظفين، المهام، والمحتوى من مكان واحد</div>
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name" id="currentUsername"></div>
+                        <div class="user-role">مسؤول النظام</div>
+                    </div>
+                </div>
+                <div class="stat-grid">
+                    <div class="stat-card"><div class="stat-label">إجمالي الموظفين</div><div class="stat-value" id="staffCount">0</div></div>
+                    <div class="stat-card"><div class="stat-label">المهام الموكلة</div><div class="stat-value" id="taskCount">0</div></div>
+                    <div class="stat-card"><div class="stat-label">الملفات المرفوعة</div><div class="stat-value" id="fileCount">0</div></div>
+                </div>
+                <div class="main-grid">
+                    <div class="card" id="createUserCard">
+                        <div class="card-header">
+                            <div class="card-icon"><i class="fas fa-user-plus"></i></div>
+                            <div>
+                                <div class="card-title">إضافة موظف جديد</div>
+                                <div class="card-subtitle">أنشئ حسابات للموظفين الجدد</div>
+                            </div>
+                        </div>
+                        <form id="createUserForm">
+                            <div id="createUserMsg"></div>
+                            <div class="form-group"><label>اسم المستخدم</label><input type="text" id="newUsername" required></div>
+                            <div class="form-group"><label>كلمة السر</label><input type="password" id="newPassword" required></div>
+                            <button type="submit" class="btn-primary">+ إنشاء موظف</button>
+                        </form>
+                        <div class="list-section">
+                            <div class="list-title">قائمة الموظفين</div>
+                            <div class="items-container" id="usersList"></div>
+                        </div>
+                    </div>
+
+                    <div class="card" id="tasksCard">
+                        <div class="card-header">
+                            <div class="card-icon"><i class="fas fa-tasks"></i></div>
+                            <div>
+                                <div class="card-title">إضافة مهمة</div>
+                                <div class="card-subtitle">أسند مهام للموظفين</div>
+                            </div>
+                        </div>
+                        <form id="addTaskForm">
+                            <div id="addTaskMsg"></div>
+                            <div class="form-group"><label>عنوان المهمة</label><input type="text" id="taskTitle" required></div>
+                            <div class="form-group"><label>الوصف</label><textarea id="taskDesc"></textarea></div>
+                            <div class="form-group"><label>إسناد إلى</label><select id="taskAssignTo" required></select></div>
+                            <button type="submit" class="btn-primary">إضافة المهمة</button>
+                        </form>
+                        <div class="list-section">
+                            <div class="list-title">المهام الحالية</div>
+                            <div class="items-container" id="tasksList"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const BASE_URL = '/api';
+        async function loadMe() {
+            const res = await fetch(BASE_URL + '/me');
+            if (!res.ok) window.location.href = '/login';
+            const user = await res.json();
+            document.getElementById('currentUsername').textContent = user.username;
+        }
+        async function logout() {
+            await fetch(BASE_URL + '/logout', { method: 'POST' });
+            window.location.href = '/login';
+        }
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/dashboard/stats');
+                if (!res.ok) return;
+                const stats = await res.json();
+                const cards = [
+                    { id: 'staffCount', value: stats.staff_count ?? 0, card: document.querySelector('.stat-card:nth-child(1)') },
+                    { id: 'taskCount', value: stats.task_count ?? 0, card: document.querySelector('.stat-card:nth-child(2)') },
+                    { id: 'fileCount', value: stats.file_count ?? 0, card: document.querySelector('.stat-card:nth-child(3)') }
+                ];
+                cards.forEach(({ id, value, card }) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    if (el.textContent !== String(value)) {
+                        el.textContent = value;
+                        card?.classList.remove('updated');
+                        void card?.offsetWidth;
+                        card?.classList.add('updated');
+                    }
+                });
+            } catch (err) {
+                console.error('Failed to load stats', err);
+            }
+        }
+
+        async function createUser(e) {
+            e.preventDefault();
+            const msgDiv = document.getElementById('createUserMsg');
+            const res = await fetch(BASE_URL + '/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: document.getElementById('newUsername').value, password: document.getElementById('newPassword').value, role: 'supervisor' })
+            });
+            const data = await res.json();
+            msgDiv.className = res.ok ? 'message success' : 'message error';
+            msgDiv.textContent = res.ok ? '✓ تم إنشاء الموظف بنجاح' : '✗ ' + (data.error || 'فشل الإنشاء');
+            if (res.ok) { document.getElementById('createUserForm').reset(); loadUsers(); loadStats(); }
+        }
+        async function loadUsers() {
+            const res = await fetch(BASE_URL + '/users');
+            if (!res.ok) return;
+            const users = await res.json();
+            const list = document.getElementById('usersList');
+            const select = document.getElementById('taskAssignTo');
+            list.innerHTML = users.length ? users.map(u => `
+                <div class="user-card">
+                    <div class="item-info"><div class="item-name">${u.username}</div><div class="item-desc">ID: ${u.id}</div></div>
+                    <div class="user-actions">
+                        <span class="badge ${u.role === 'admin' ? 'badge-admin' : 'badge-supervisor'}">${u.role === 'admin' ? 'مسؤول' : 'موظف'}</span>
+                        <a href="/employee/${u.id}/files" target="_blank" style="color:#4f46e5;text-decoration:none;font-weight:600;">عرض الملفات</a>
+                        ${u.role !== 'admin' ? `<button class="btn-delete" onclick="deleteUser(${u.id})">حذف</button>` : ''}
+                    </div>
+                </div>`).join('') : '<div class="empty-state"><i class="fas fa-inbox"></i><p>لا توجد موظفون</p></div>';
+            select.innerHTML = '<option value="">-- اختر موظف --</option>' + users.filter(u => u.role !== 'admin').map(u => `<option value="${u.id}">${u.username}</option>`).join('');
+        }
+        async function deleteUser(userId) {
+            if (!confirm('هل أنت متأكد؟')) return;
+            const res = await fetch(BASE_URL + '/users/' + userId, { method: 'DELETE' });
+            if (res.ok) loadUsers();
+        }
+        async function addTask(e) {
+            e.preventDefault();
+            const msgDiv = document.getElementById('addTaskMsg');
+            const res = await fetch(BASE_URL + '/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: document.getElementById('taskTitle').value, description: document.getElementById('taskDesc').value, assigned_to: parseInt(document.getElementById('taskAssignTo').value) })
+            });
+            const data = await res.json();
+            msgDiv.className = res.ok ? 'message success' : 'message error';
+            msgDiv.textContent = res.ok ? '✓ تم إضافة المهمة بنجاح' : '✗ ' + (data.error || 'فشل الإضافة');
+            if (res.ok) { document.getElementById('addTaskForm').reset(); loadTasks(); loadStats(); }
+        }
+        async function loadTasks() {
+            const res = await fetch(BASE_URL + '/tasks');
+            if (!res.ok) return;
+            const tasks = await res.json();
+            const list = document.getElementById('tasksList');
+            list.innerHTML = tasks.length ? tasks.map(t => `
+                <div class="task-card">
+                    <div class="item-info"><div class="item-name">${t.title}</div><div class="item-desc">${t.description || 'بدون وصف'} | ${t.assigned_to_username || 'غير محدد'}</div></div>
+                    <span class="badge ${t.status === 'done' ? 'badge-done' : 'badge-pending'}">${t.status === 'done' ? '✓ مكتملة' : '⏳ قيد الانتظار'}</span>
+                </div>`).join('') : '<div class="empty-state"><i class="fas fa-clipboard"></i><p>لا توجد مهام</p></div>';
+        }
+        document.getElementById('createUserForm').addEventListener('submit', createUser);
+        document.getElementById('addTaskForm').addEventListener('submit', addTask);
+        loadMe();
+        loadUsers();
+        loadTasks();
+        loadStats();
+        setInterval(loadStats, 5000);
+    </script>
+</body>
+</html>

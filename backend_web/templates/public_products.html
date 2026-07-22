@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>معرض منتجات Bola Designs</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand"><i class="fas fa-store"></i><span>Bola Designs</span></div>
+            <nav class="sidebar-nav">
+                <a class="nav-item active" href="/catalog"><i class="fas fa-store-alt"></i><span>المعرض العام</span></a>
+                <a class="nav-item" href="/login"><i class="fas fa-sign-in-alt"></i><span>دخول المسؤول</span></a>
+            </nav>
+        </aside>
+        <main class="content-area">
+            <div class="page-card">
+                <div class="page-header">
+                    <div>
+                        <div class="page-title">معرض المنتجات</div>
+                        <div class="page-subtitle">عرض المنتجات والأسعار للزبائن بدون الحاجة لتسجيل الدخول</div>
+                    </div>
+                </div>
+                <div class="brand-hero">
+                    <div class="brand-logo">
+                        <img src="{{ url_for('static', filename='logo.svg') }}" alt="Bola Designs Logo">
+                        <div class="hero-info">
+                            <div class="hero-title">Bola Designs</div>
+                            <div class="hero-subtitle">أفضل تصميمات الدعاية والإعلان بأسلوب عصري واحترافي لتجعل علامتك التجارية تتكلم.</div>
+                        </div>
+                    </div>
+                    <div class="hero-contact">
+                        <span><i class="fas fa-phone"></i> 01222856926</span>
+                        <span><i class="fas fa-award"></i> تصميم هوية، إعلانات رقمية، منشورات ومطبوعات</span>
+                    </div>
+                </div>
+                <div id="publicProducts" class="main-grid"></div>
+            </div>
+        </main>
+    </div>
+    <script>
+        async function loadPublicProducts() {
+            const res = await fetch('/api/public/products');
+            const products = res.ok ? await res.json() : [];
+            const container = document.getElementById('publicProducts');
+            if (!products.length) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-box-open"></i><p>لا توجد منتجات معروضة حالياً</p></div>';
+                return;
+            }
+            container.innerHTML = products.map(p => `
+                <div class="card product-card">
+                    <div class="product-card-image">
+                        ${p.image_url ? `<img src="${p.image_url}" alt="${p.name}">` : `<div class="product-image-placeholder"><i class="fas fa-image"></i></div>`}
+                    </div>
+                    <div class="product-card-content">
+                        <div class="card-header">
+                            <div class="card-icon"><i class="fas fa-box"></i></div>
+                            <div>
+                                <div class="card-title">${p.name}</div>
+                                <div class="card-subtitle">${p.description || 'بدون وصف'}</div>
+                            </div>
+                        </div>
+                        <div class="item-info" style="padding:0 10px 10px;">
+                            <div class="item-desc">السعر: <strong>${Number(p.price).toFixed(2)} ج.م</strong></div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        loadPublicProducts();
+    </script>
+</body>
+</html>
