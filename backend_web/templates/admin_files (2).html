@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة الملفات | Bola Designs</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body data-page="admin-files">
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand"><i class="fas fa-file-upload"></i><span>Bola Designs</span></div>
+            <nav class="sidebar-nav">
+                <a class="nav-item" href="/admin"><i class="fas fa-home"></i><span>لوحة التحكم</span></a>
+                <a class="nav-item" href="/admin/attendance"><i class="fas fa-calendar-check"></i><span>الحضور والغياب</span></a>
+                <a class="nav-item active" href="/admin/files"><i class="fas fa-file-upload"></i><span>إدارة الملفات</span></a>
+                <a class="nav-item" href="/login" onclick="logout()"><i class="fas fa-sign-out-alt"></i><span>تسجيل الخروج</span></a>
+            </nav>
+        </aside>
+        <main class="content-area">
+            <div class="page-card">
+                <div class="page-header">
+                    <div>
+                        <div class="page-title">إدارة الملفات</div>
+                        <div class="page-subtitle">رفع الملفات للموظفين من صفحة موحدة ومريحة</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon"><i class="fas fa-file-upload"></i></div>
+                        <div>
+                            <div class="card-title">رفع الملفات للموظفين</div>
+                            <div class="card-subtitle">اختر موظفًا ثم ارفع الملف</div>
+                        </div>
+                    </div>
+                    <form id="uploadFileForm" enctype="multipart/form-data">
+                        <div id="uploadFileMsg"></div>
+                        <div class="form-group"><label>الموظف</label><select id="uploadToUser" required></select></div>
+                        <div class="form-group"><input type="file" id="uploadFileInput" required></div>
+                        <button type="submit" class="btn-primary">رفع الملف</button>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+        const BASE_URL = '/api';
+        async function logout() {
+            await fetch(BASE_URL + '/logout', { method: 'POST' });
+            window.location.href = '/login';
+        }
+        async function loadUsers() {
+            const res = await fetch(BASE_URL + '/users');
+            if (!res.ok) return;
+            const users = await res.json();
+            document.getElementById('uploadToUser').innerHTML = '<option value="">-- اختر موظف --</option>' + users.filter(u => u.role !== 'admin').map(u => `<option value="${u.id}">${u.username}</option>`).join('');
+        }
+        document.getElementById('uploadFileForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const msgDiv = document.getElementById('uploadFileMsg');
+            const userId = document.getElementById('uploadToUser').value;
+            const fileInput = document.getElementById('uploadFileInput');
+            const fd = new FormData();
+            fd.append('file', fileInput.files[0]);
+            const res = await fetch(BASE_URL + '/users/' + userId + '/files', { method: 'POST', body: fd });
+            const data = await res.json();
+            msgDiv.className = res.ok ? 'message success' : 'message error';
+            msgDiv.textContent = res.ok ? '✓ تم رفع الملف بنجاح' : '✗ ' + (data.error || 'فشل الرفع');
+        });
+        loadUsers();
+    </script>
+</body>
+</html>

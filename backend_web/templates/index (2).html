@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bola Designs - نظام إدارة المهام</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="app" id="app">
+        <div class="auth-page" id="authPage">
+            <div class="login-card">
+                <div class="login-header">
+                    <div class="login-icon">
+                        <i class="fas fa-lock"></i>
+                    </div>
+                    <div class="login-title">Bola Designs</div>
+                    <div class="login-subtitle">نظام إدارة المهام الذكي</div>
+                </div>
+                <form id="loginForm">
+                    <div id="loginError" class="hidden"></div>
+                    <div class="form-group">
+                        <label for="username">اسم المستخدم</label>
+                        <input type="text" id="username" placeholder="أدخل اسم المستخدم" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">كلمة السر</label>
+                        <input type="password" id="password" placeholder="أدخل كلمة السر" required>
+                    </div>
+                    <div class="form-group remember-row">
+                        <input type="checkbox" id="rememberMe">
+                        <label for="rememberMe">تذكرني على هذا الجهاز</label>
+                    </div>
+                    <button type="submit" class="btn">تسجيل الدخول</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="dashboard-page hidden" id="dashboardPage">
+            <div class="navbar">
+                <div class="navbar-brand">
+                    <i class="fas fa-tasks"></i>
+                    <span>Bola Designs</span>
+                </div>
+                <div class="navbar-right">
+                    <div class="user-info">
+                        <div class="user-name" id="currentUsername"></div>
+                        <div class="user-role" id="currentUserRole"></div>
+                    </div>
+                    <div class="nav-actions">
+                        <label class="quick-label" for="quickActionsSelect">العمليات السريعة</label>
+                        <select id="quickActionsSelect" class="quick-actions-select" onchange="handleQuickAction(this.value)">
+                            <option value="">اختر عملية...</option>
+                            <option value="createUserCard">➕ إضافة موظف</option>
+                            <option value="attendanceCard">🗓️ تسجيل الحضور والغياب</option>
+                            <option value="tasksCard">📝 إدارة المهام</option>
+                        </select>
+                    </div>
+                    <button class="btn-logout" onclick="logout()">تسجيل الخروج</button>
+                </div>
+            </div>
+
+            <div class="main-grid" id="mainGrid"></div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ user.username }} | Bola Designs</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand"><i class="fas fa-user"></i><span>Bola Designs</span></div>
+            <nav class="sidebar-nav">
+                {% if current_user.role == 'admin' %}
+                <a class="nav-item" href="/admin"><i class="fas fa-home"></i><span>لوحة التحكم</span></a>
+                {% else %}
+                <a class="nav-item" href="/employee"><i class="fas fa-home"></i><span>لوحة الموظف</span></a>
+                {% endif %}
+                <a class="nav-item active" href="#"><i class="fas fa-id-badge"></i><span>{{ user.username }}</span></a>
+            </nav>
+        </aside>
+        <main class="content-area">
+            <div class="page-card">
+                <div class="page-header">
+                    <div>
+                        <div class="page-title">{{ user.username }}</div>
+                        <div class="page-subtitle">صفحة تفصيلية خاصة بهذا الموظف</div>
+                    </div>
+                </div>
+                <div class="stat-grid">
+                    <div class="stat-card"><div class="stat-label">المهام</div><div class="stat-value">{{ tasks|length }}</div></div>
+                    <div class="stat-card"><div class="stat-label">الملفات</div><div class="stat-value">{{ files|length }}</div></div>
+                    <div class="stat-card"><div class="stat-label">السجل</div><div class="stat-value">{{ attendance|length }}</div></div>
+                </div>
+                <div class="main-grid">
+                    <div class="card">
+                        <div class="card-header"><div class="card-icon"><i class="fas fa-tasks"></i></div><div><div class="card-title">المهام</div><div class="card-subtitle">المهام الموكلة لهذا الموظف</div></div></div>
+                        <div class="items-container">
+                            {% if tasks %}
+                                {% for task in tasks %}
+                                <div class="task-card">
+                                    <div class="item-info"><div class="item-name">{{ task.title }}</div><div class="item-desc">{{ task.description or 'بدون وصف' }}</div></div>
+                                    <span class="badge {{ 'badge-done' if task.status == 'done' else 'badge-pending' }}">{{ '✓ مكتملة' if task.status == 'done' else '⏳ قيد الانتظار' }}</span>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="empty-state"><i class="fas fa-clipboard"></i><p>لا توجد مهام</p></div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><div class="card-icon"><i class="fas fa-folder-open"></i></div><div><div class="card-title">الملفات</div><div class="card-subtitle">الملفات المرفوعة لهذا الموظف</div></div></div>
+                        <div class="items-container">
+                            {% if files %}
+                                <ul style="padding-right:20px; margin:0;">
+                                    {% for item in files %}
+                                    <li style="margin-bottom:8px;"><a href="{{ item.url }}" download="{{ item.filename }}" style="color:#4f46e5;">{{ item.filename }}</a></li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <div class="empty-state"><i class="fas fa-file-alt"></i><p>لا توجد ملفات</p></div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="card" style="margin-top:20px;">
+                    <div class="card-header"><div class="card-icon"><i class="fas fa-calendar-check"></i></div><div><div class="card-title">سجل الحضور</div><div class="card-subtitle">أيام الحضور والغياب لهذا الموظف</div></div></div>
+                    <div class="items-container">
+                        {% if attendance %}
+                            {% for entry in attendance %}
+                            <div class="task-card">
+                                <div class="item-info"><div class="item-name">{{ entry.attendance_date }}</div><div class="item-desc">{{ entry.status == 'present' and 'حضور' or 'غياب' }}</div></div>
+                                <span class="badge {{ 'badge-done' if entry.status == 'present' else 'badge-pending' }}">{{ 'حضور' if entry.status == 'present' else 'غياب' }}</span>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state"><i class="fas fa-calendar-check"></i><p>لا يوجد سجل حضور بعد</p></div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ملفاتي | Bola Designs</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body data-page="files">
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand"><i class="fas fa-file-alt"></i><span>Bola Designs</span></div>
+            <nav class="sidebar-nav">
+                <a class="nav-item" href="/employee"><i class="fas fa-home"></i><span>لوحة الموظف</span></a>
+                <a class="nav-item active" href="/employee/files"><i class="fas fa-folder-open"></i><span>ملفاتي</span></a>
+                <a class="nav-item" href="/login" onclick="logout()"><i class="fas fa-sign-out-alt"></i><span>تسجيل الخروج</span></a>
+            </nav>
+        </aside>
+        <main class="content-area">
+            <div class="page-card">
+                <div class="page-header">
+                    <div>
+                        <div class="page-title">ملفاتي</div>
+                        <div class="page-subtitle">عرض وتحميل الملفات الخاصة بك</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon"><i class="fas fa-folder-open"></i></div>
+                        <div>
+                            <div class="card-title">الملفات الخاصة</div>
+                            <div class="card-subtitle">كل ما رفعته يمكنك تنزيله من هنا</div>
+                        </div>
+                    </div>
+                    <div id="filesList"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+        const BASE_URL = '/api';
+        async function logout() {
+            await fetch(BASE_URL + '/logout', { method: 'POST' });
+            window.location.href = '/login';
+        }
+        async function loadFiles() {
+            const res = await fetch(BASE_URL + '/me');
+            if (!res.ok) window.location.href = '/login';
+            const user = await res.json();
+            const filesRes = await fetch(BASE_URL + '/users/' + user.id + '/files');
+            const files = filesRes.ok ? await filesRes.json() : [];
+            const list = document.getElementById('filesList');
+            list.innerHTML = files.length ? '<ul style="padding-right:20px; margin:0;">' + files.map(f => `<li style="margin-bottom:8px;"><a href="${f.url}" download="${f.filename}" style="color:#4f46e5;">${f.filename}</a></li>`).join('') + '</ul>' : '<div class="empty-state"><i class="fas fa-file-alt"></i><p>لا توجد ملفات بعد</p></div>';
+        }
+        loadFiles();
+    </script>
+</body>
+</html>

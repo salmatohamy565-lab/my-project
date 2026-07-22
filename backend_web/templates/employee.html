@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة الموظف | Bola Designs</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v=STATIC_VERSION) }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body data-page="employee">
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand"><i class="fas fa-user-check"></i><span>Bola Designs</span></div>
+            <nav class="sidebar-nav">
+                <a class="nav-item active" href="/employee"><i class="fas fa-home"></i><span>لوحة الموظف</span></a>
+                <a class="nav-item" href="/employee/files"><i class="fas fa-folder-open"></i><span>ملفاتي</span></a>
+                <a class="nav-item" href="/products"><i class="fas fa-shopping-bag"></i><span>منتجاتي</span></a>
+                <a class="nav-item" href="/login" onclick="logout()"><i class="fas fa-sign-out-alt"></i><span>تسجيل الخروج</span></a>
+            </nav>
+        </aside>
+        <main class="content-area">
+            <div class="page-card">
+                <div class="page-header">
+                    <div>
+                        <div class="page-title">لوحة الموظف</div>
+                        <div class="page-subtitle">تابع مهامك، أرفع الملفات، وراجع مستنداتك</div>
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name" id="currentUsername"></div>
+                        <div class="user-role">موظف</div>
+                    </div>
+                </div>
+                <div class="card" style="margin-top:20px;">
+                    <div class="card-header">
+                        <div class="card-icon"><i class="fas fa-tasks"></i></div>
+                        <div>
+                            <div class="card-title">مهامي</div>
+                            <div class="card-subtitle">المهام المسندة إليّ</div>
+                        </div>
+                    </div>
+                    <div id="myTasksList"></div>
+                    <div style="margin-top:20px;">
+                        <form id="uploadMyFileForm" enctype="multipart/form-data">
+                            <div id="uploadMyFileMsg"></div>
+                            <div class="form-group"><label>رفع ملف عملي</label><input type="file" id="uploadMyFileInput" required></div>
+                            <button type="submit" class="btn-primary">رفع الملف</button>
+                        </form>
+                    </div>
+                    <div style="margin-top:20px;">
+                        <details open style="border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px; background:#f9fafb;">
+                            <summary style="cursor:pointer; font-weight:700; color:#333;">ملفاتي</summary>
+                            <div style="margin-top:12px;"><div id="myFilesList"></div></div>
+                        </details>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const BASE_URL = '/api';
+        async function loadMe() {
+            const res = await fetch(BASE_URL + '/me');
+            if (!res.ok) window.location.href = '/login';
+            const user = await res.json();
+            document.getElementById('currentUsername').textContent = user.username;
+            window.CURRENT_USER_ID = user.id;
+        }
+        async function logout() {
+            await fetch(BASE_URL + '/logout', { method: 'POST' });
+            window.location.href = '/login';
+        }
+        async function loadMyTasks() {
+            const res = await fetch(BASE_URL + '/tasks');
+            if (!res.ok) return;
+            const tasks = await res.json();
+            const list = document.getElementById('myTasksList');
+            list.innerHTML = tasks.length ? tasks.map(t => `
+                <div class="task-card">
+                    <div class="item-info"><div class="item-name">${t.title}</div><div class="item-desc">${t.description || 'بدون وصف'}</div></div>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <span class="badge ${t.status === 'done' ? 'badge-done' : 'badge-pending'}">${t.status === 'done' ? '✓ مكتملة' : '⏳ قيد الانتظار'}</span>
+                        ${t.status === 'pending' ? `<button class="btn-small" onclick="markDone(${t.id})">إكمال</button>` : ''}
+                    </div>
+                </div>`).join('') : '<div class="empty-state"><i class="fas fa-clipboard"></i><p>لا توجد مهام مسندة إليك</p></div>';
+        }
+        async function loadMyFilesList() {
+            const res = await fetch(BASE_URL + '/users/' + window.CURRENT_USER_ID + '/files');
+            if (!res.ok) return;
+            const files = await res.json();
+            const list = document.getElementById('myFilesList');
+            list.innerHTML = files.length ? '<ul style="padding-right:20px; margin:0;">' + files.map(f => `<li style="margin-bottom:8px;"><a href="${f.url}" download="${f.filename}" style="color:#4f46e5;">${f.filename}</a></li>`).join('') + '</ul>' : '<div class="empty-state"><i class="fas fa-file-alt"></i><p>لا توجد ملفات بعد</p></div>';
+        }
+        async function markDone(taskId) {
+            const res = await fetch(BASE_URL + '/tasks/' + taskId + '/done', { method: 'PUT' });
+            if (res.ok) loadMyTasks();
+        }
+        document.getElementById('uploadMyFileForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('uploadMyFileInput');
+            const msgDiv = document.getElementById('uploadMyFileMsg');
+            if (!fileInput.files.length) return;
+            const fd = new FormData();
+            fd.append('file', fileInput.files[0]);
+            const res = await fetch(BASE_URL + '/users/' + window.CURRENT_USER_ID + '/files', { method: 'POST', body: fd });
+            msgDiv.className = res.ok ? 'message success' : 'message error';
+            msgDiv.textContent = res.ok ? '✓ تم رفع الملف بنجاح' : '✗ فشل الرفع';
+            if (res.ok) { document.getElementById('uploadMyFileForm').reset(); loadMyTasks(); loadMyFilesList(); }
+        });
+        loadMe().then(() => { loadMyTasks(); loadMyFilesList(); });
+    </script>
+</body>
+</html>
