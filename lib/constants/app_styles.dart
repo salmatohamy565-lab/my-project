@@ -77,5 +77,11 @@ class AppStyles {
       offset: const Offset(0, 6),
     ),
   ];
+
+  static TextStyle buttonText = GoogleFonts.cairo(
+    fontSize: 16.sp,
+    fontWeight: FontWeight.w700,
+    color: Colors.white,
+  );
 }
 

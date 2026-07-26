@@ -2,60 +2,106 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiService {
   final Dio _dio = Dio();
-  String _baseUrl = kIsWeb ? 'http://localhost:5001' : 'http://192.168.1.19:5001'; // Default for emulator/Web
+  final _secureStorage = const FlutterSecureStorage();
+  String _baseUrl = kIsWeb ? 'http://localhost:5001' : 'http://192.168.1.18:5001';
   String? _cookie;
+  String? _token;
 
   String get baseUrl => _baseUrl;
   String? get cookie => _cookie;
+  String? get token => _token;
 
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
   ApiService._internal() {
-    _dio.options.connectTimeout = const Duration(seconds: 10);
-    _dio.options.receiveTimeout = const Duration(seconds: 10);
-    
-    // Interceptor to manage Cookies and dynamic base URLs
+    _dio.options.connectTimeout = const Duration(seconds: 8);
+    _dio.options.receiveTimeout = const Duration(seconds: 8);
+
     _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) {
+      onRequest: (options, handler) async {
         options.baseUrl = '$_baseUrl/api';
+        if (_token != null && _token!.isNotEmpty) {
+          options.headers['Authorization'] = 'Bearer $_token';
+        }
         if (_cookie != null) {
           options.headers['Cookie'] = _cookie;
         }
         return handler.next(options);
       },
       onResponse: (response, handler) async {
-        // Extract Set-Cookie header to persist Flask session
         final cookies = response.headers['set-cookie'];
         if (cookies != null && cookies.isNotEmpty) {
-          // Join multiple cookies if any, separated by semicolon
           final newCookie = cookies.map((c) => c.split(';').first).join('; ');
           _cookie = newCookie;
-          
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('session_cookie', newCookie);
         }
         return handler.next(response);
+      },
+      onError: (DioException err, handler) async {
+        if (err.type == DioExceptionType.connectionTimeout ||
+            err.type == DioExceptionType.sendTimeout ||
+            err.type == DioExceptionType.receiveTimeout ||
+            err.type == DioExceptionType.connectionError ||
+            err.error is SocketException) {
+          
+          final candidateUrls = [
+            'https://8863521f63018d26-197-59-149-44.serveousercontent.com',
+            'http://127.0.0.1:5001',
+            'http://192.168.1.18:5001',
+            'http://10.0.2.2:5001',
+            'http://localhost:5001',
+          ];
+
+          for (final candidate in candidateUrls) {
+            if (candidate == _baseUrl) continue;
+            try {
+              final testDio = Dio(BaseOptions(
+                connectTimeout: const Duration(seconds: 2),
+                receiveTimeout: const Duration(seconds: 2),
+              ));
+              final pingRes = await testDio.get('$candidate/api/public/products');
+              if (pingRes.statusCode == 200) {
+                await setBaseUrl(candidate);
+                
+                final RequestOptions opts = err.requestOptions;
+                opts.baseUrl = '$_baseUrl/api';
+                final clonedReq = await _dio.fetch(opts);
+                return handler.resolve(clonedReq);
+              }
+            } catch (_) {}
+          }
+        }
+        return handler.next(err);
       },
     ));
   }
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
+    _baseUrl = kIsWeb ? 'http://localhost:5001' : 'https://8863521f63018d26-197-59-149-44.serveousercontent.com';
     String? storedUrl = prefs.getString('api_base_url');
-    if (storedUrl == null || storedUrl == 'http://10.0.2.2:5001') {
-      _baseUrl = kIsWeb ? 'http://localhost:5001' : 'http://192.168.1.19:5001';
-      await prefs.setString('api_base_url', _baseUrl);
-    } else {
+    if (storedUrl != null &&
+        storedUrl.isNotEmpty &&
+        storedUrl.startsWith('http')) {
       _baseUrl = storedUrl;
+    } else {
+      await prefs.setString('api_base_url', _baseUrl);
     }
     _cookie = prefs.getString('session_cookie');
+    _token = await _secureStorage.read(key: 'jwt_token');
+  }
+
+  Future<void> saveToken(String jwtToken) async {
+    _token = jwtToken;
+    await _secureStorage.write(key: 'jwt_token', value: jwtToken);
   }
 
   Future<void> setBaseUrl(String url) async {
-    // Standardize URL (remove trailing slash)
     String cleanedUrl = url.trim();
     if (cleanedUrl.endsWith('/')) {
       cleanedUrl = cleanedUrl.substring(0, cleanedUrl.length - 1);
@@ -67,17 +113,147 @@ class ApiService {
 
   Future<void> clearSession() async {
     _cookie = null;
+    _token = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('session_cookie');
+    await _secureStorage.delete(key: 'jwt_token');
+  }
+
+  Future<void> _ensureWorkingBaseUrl() async {
+    try {
+      final pingDio = Dio(BaseOptions(
+        connectTimeout: const Duration(milliseconds: 1500),
+        receiveTimeout: const Duration(milliseconds: 1500),
+      ));
+      final res = await pingDio.get('$_baseUrl/api/public/products');
+      if (res.statusCode == 200) return;
+    } catch (_) {}
+
+    final candidates = [
+      'https://8863521f63018d26-197-59-149-44.serveousercontent.com',
+      'http://127.0.0.1:5001',
+      'http://192.168.1.18:5001',
+      'http://10.0.2.2:5001',
+      'http://localhost:5001',
+    ];
+
+    for (final candidate in candidates) {
+      if (candidate == _baseUrl) continue;
+      try {
+        final pingDio = Dio(BaseOptions(
+          connectTimeout: const Duration(milliseconds: 1500),
+          receiveTimeout: const Duration(milliseconds: 1500),
+        ));
+        final res = await pingDio.get('$candidate/api/public/products');
+        if (res.statusCode == 200) {
+          await setBaseUrl(candidate);
+          return;
+        }
+      } catch (_) {}
+    }
   }
 
   // Auth APIs
-  Future<Response> login(String username, String password, bool remember) async {
+  Future<Response> register({
+    required String email,
+    required String password,
+    required String name,
+    String? username,
+    String? phone,
+  }) async {
+    await _ensureWorkingBaseUrl();
     try {
-      final response = await _dio.post('/login', data: {
-        'username': username,
+      final uName = (username != null && username.trim().isNotEmpty)
+          ? username.trim()
+          : (email.contains('@') ? email.split('@').first : email.trim());
+
+      final response = await _dio.post('/customer/register', data: {
+        'username': uName,
+        'email': email,
+        'password': password,
+        'full_name': name,
+        'name': name,
+        'phone': phone ?? '',
+      });
+      if (response.data != null && response.data['token'] != null) {
+        await saveToken(response.data['token']);
+      }
+      return response;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        final response = await _dio.post('/auth/register', data: {
+          'email': email,
+          'password': password,
+          'name': name,
+        });
+        if (response.data != null && response.data['token'] != null) {
+          await saveToken(response.data['token']);
+        }
+        return response;
+      }
+      throw _handleError(e);
+    }
+  }
+
+  Future<Response> login(String usernameOrEmail, String password, bool remember) async {
+    await _ensureWorkingBaseUrl();
+    try {
+      final response = await _dio.post('/customer/login', data: {
+        'username': usernameOrEmail,
         'password': password,
         'remember': remember,
+      });
+      if (response.data != null && response.data['token'] != null) {
+        await saveToken(response.data['token']);
+      }
+      return response;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        final response = await _dio.post('/login', data: {
+          'username': usernameOrEmail,
+          'password': password,
+          'remember': remember,
+        });
+        if (response.data != null && response.data['token'] != null) {
+          await saveToken(response.data['token']);
+        }
+        return response;
+      }
+      throw _handleError(e);
+    }
+  }
+
+  Future<Response> googleAuth(String idToken) async {
+    try {
+      final response = await _dio.post('/auth/google', data: {
+        'id_token': idToken,
+      });
+      if (response.data != null && response.data['token'] != null) {
+        await saveToken(response.data['token']);
+      }
+      return response;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Response> forgetPassword(String email) async {
+    try {
+      final response = await _dio.post('/auth/forget-password', data: {
+        'email': email,
+      });
+      return response;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Response> resetPassword(String email, String code, String newPassword) async {
+    try {
+      final response = await _dio.post('/auth/reset-password', data: {
+        'email': email,
+        'code': code,
+        'new_password': newPassword,
       });
       return response;
     } on DioException catch (e) {
@@ -91,7 +267,7 @@ class ApiService {
       await clearSession();
       return response;
     } on DioException catch (e) {
-      await clearSession(); // Force clear local session even if api fails
+      await clearSession();
       throw _handleError(e);
     }
   }
@@ -99,6 +275,74 @@ class ApiService {
   Future<Response> getMe() async {
     try {
       final response = await _dio.get('/me');
+      return response;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  // Profile APIs
+  Future<Response> getProfile() async {
+    try {
+      final response = await _dio.get('/profile');
+      return response;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Response> updateProfile({String? name, String? phone, File? photo}) async {
+    try {
+      if (photo == null || kIsWeb) {
+        final response = await _dio.post(
+          '/profile',
+          data: {
+            if (name != null) 'name': name,
+            if (phone != null) 'phone': phone,
+          },
+        );
+        return response;
+      }
+
+      final Map<String, dynamic> map = {};
+      if (name != null) map['name'] = name;
+      if (phone != null) map['phone'] = phone;
+
+      final fileName = photo.path.split(photo.path.contains('\\') ? '\\' : '/').last;
+      map['photo'] = await MultipartFile.fromFile(photo.path, filename: fileName);
+
+      final formData = FormData.fromMap(map);
+      final response = await _dio.post(
+        '/profile',
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return response;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  // Orders APIs
+  Future<Response> getOrders({String? status}) async {
+    try {
+      final response = await _dio.get(
+        '/orders',
+        queryParameters: status != null ? {'status': status} : null,
+      );
+      return response;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Response> createOrder({required dynamic productIds, String status = 'pending', double totalPrice = 0.0}) async {
+    try {
+      final response = await _dio.post('/orders', data: {
+        'product_ids': productIds,
+        'status': status,
+        'total_price': totalPrice,
+      });
       return response;
     } on DioException catch (e) {
       throw _handleError(e);
@@ -297,7 +541,7 @@ class ApiService {
         'description': description,
         'price': price.toString(),
       };
-      
+
       if (imageFile != null) {
         final fileName = imageFile.path.split(imageFile.path.contains('\\') ? '\\' : '/').last;
         dataMap['image'] = await MultipartFile.fromFile(imageFile.path, filename: fileName);
@@ -322,7 +566,7 @@ class ApiService {
         'description': description,
         'price': price.toString(),
       };
-      
+
       if (imageFile != null) {
         final fileName = imageFile.path.split(imageFile.path.contains('\\') ? '\\' : '/').last;
         dataMap['image'] = await MultipartFile.fromFile(imageFile.path, filename: fileName);
@@ -351,11 +595,6 @@ class ApiService {
 
   Future<Response> getPublicProducts() async {
     try {
-      // The public catalog endpoint doesn't require prefixing with /api in backend,
-      // but in Flask we defined it as: @app.route('/api/public/products', methods=['GET'])
-      // Wait, let's verify if public products uses /api.
-      // Yes! Line 624 in بولا.py: @app.route('/api/public/products', methods=['GET'])
-      // So we can use /public/products relative to options.baseUrl (which is /api)
       final response = await _dio.get('/public/products');
       return response;
     } on DioException catch (e) {

@@ -10,6 +10,7 @@ import '../../providers/product_provider.dart';
 import '../../widgets/radial_background.dart';
 import '../../widgets/app_logo_bar.dart';
 import '../../widgets/animations.dart';
+import '../../widgets/payment_methods_modal.dart';
 import '../login_screen.dart';
 
 class PublicCatalogScreen extends StatefulWidget {
@@ -386,6 +387,38 @@ class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
                                           ),
                                         ),
                                       ],
+                                    ),
+                                  ),
+                                  const Divider(color: AppColors.borderLight, height: 16),
+                                  Padding(
+                                    padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 16.w),
+                                    child: SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton.icon(
+                                        onPressed: () {
+                                          PaymentMethodsModal.show(
+                                            context,
+                                            productName: p.name,
+                                            productPrice: p.price,
+                                            onConfirmOrder: (methodTitle, senderInfo, [proofFile]) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text('✓ تم استلام طلبك لـ "${p.name}" عبر $methodTitle بنجاح!', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                                  backgroundColor: AppColors.successStart,
+                                                ),
+                                              );
+                                            },
+                                          );
+                                        },
+                                        icon: const Icon(Icons.shopping_cart_checkout, color: Colors.white, size: 16),
+                                        label: Text('طلب ودفع (كاش/انستاباي)', style: AppStyles.labelBold.copyWith(color: Colors.white, fontSize: 12.sp)),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.secondaryAccent,
+                                          elevation: 2,
+                                          padding: EdgeInsets.symmetric(vertical: 8.h),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],

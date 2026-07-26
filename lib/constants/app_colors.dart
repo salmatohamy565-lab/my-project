@@ -52,5 +52,8 @@ class AppColors {
   static const Color dangerEnd = Color(0xFFFA5252);
   static const List<Color> dangerGradient = [dangerStart, dangerEnd];
   static const List<Color> deleteGradient = [Color(0xFFE03131), Color(0xFFFA5252)];
+  
+  // Emerald Green for success feedback
+  static const Color emeraldGreen = Color(0xFF2B8A3E);
 }
 

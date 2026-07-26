@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_styles.dart';
 import '../../providers/auth_provider.dart';
@@ -11,7 +10,7 @@ import '../../providers/product_provider.dart';
 import '../../widgets/radial_background.dart';
 import '../../widgets/app_logo_bar.dart';
 import '../../widgets/custom_bottom_nav_bar.dart';
-import '../../widgets/app_logo_bar.dart';
+import '../../widgets/payment_methods_modal.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -209,8 +208,19 @@ class _ProductsScreenState extends State<ProductsScreen> {
                               ],
                             ),
                           ),
-                          SizedBox(width: 12.w),
-                          if (isAdmin)
+                          SizedBox(width: 8.w),
+                          ElevatedButton.icon(
+                            onPressed: () => PaymentMethodsModal.show(context),
+                            icon: const Icon(Icons.account_balance_wallet, color: Colors.white, size: 16),
+                            label: Text('طرق الدفع', style: AppStyles.labelBold.copyWith(color: Colors.white, fontSize: 12.sp)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryAccent,
+                              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
+                            ),
+                          ),
+                          if (isAdmin) ...[
+                            SizedBox(width: 6.w),
                             ElevatedButton(
                               onPressed: () {
                                 setState(() {
@@ -220,14 +230,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.secondaryAccent,
-                                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
+                                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
                               ),
                               child: Text(
-                                _showForm ? 'إلغاء' : 'إضافة منتج جديد',
-                                style: AppStyles.labelBold.copyWith(color: Colors.white),
+                                _showForm ? 'إلغاء' : 'إضافة منتج',
+                                style: AppStyles.labelBold.copyWith(color: Colors.white, fontSize: 12.sp),
                               ),
                             ),
+                          ],
                         ],
                       ),
                       SizedBox(height: 20.h),
@@ -306,8 +317,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       SizedBox(height: 24.h),
 
                       // Admin Save/Edit form card
-                      if (isAdmin && _showForm) ...[
-                        Container(
+                      if (isAdmin && _showForm)
+                        Column(
+                          children: [
+                            Container(
                           padding: EdgeInsets.all(20.w),
                           decoration: BoxDecoration(
                             color: AppColors.cardBg,
@@ -453,8 +466,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
                             ),
                           ),
                         ),
-                        SizedBox(height: 24.h),
-                      ],
+                        ],
+                      ),
 
                       // Products section matching CSS grid
                       if (productProvider.isLoading && products.isEmpty)
@@ -556,36 +569,58 @@ class _ProductsScreenState extends State<ProductsScreen> {
                                           ],
                                         ),
                                         
-                                        // Admin actions row
-                                        if (isAdmin) ...[
-                                          const Divider(color: AppColors.borderLight, height: 24),
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.end,
-                                            children: [
-                                              ElevatedButton(
-                                                onPressed: () => _startEdit(p),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: AppColors.primaryAccent.withOpacity(0.14),
-                                                  elevation: 0,
-                                                  padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-                                                ),
-                                                child: const Text('تعديل', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                        const Divider(color: AppColors.borderLight, height: 20),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            ElevatedButton.icon(
+                                              onPressed: () {
+                                                PaymentMethodsModal.show(
+                                                  context,
+                                                  productName: p.name,
+                                                  productPrice: p.price,
+                                                  onConfirmOrder: (methodTitle, senderInfo, [proofFile]) {
+                                                    _showSnackbar('✓ تم استلام طلبك لـ "${p.name}" عبر $methodTitle بنجاح!', AppColors.successStart);
+                                                  },
+                                                );
+                                              },
+                                              icon: const Icon(Icons.shopping_cart_checkout, color: Colors.white, size: 16),
+                                              label: Text('طلب ودفع (كاش/انستاباي)', style: AppStyles.labelBold.copyWith(color: Colors.white, fontSize: 12.sp)),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: AppColors.secondaryAccent,
+                                                elevation: 2,
+                                                padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                                               ),
-                                              SizedBox(width: 10.w),
-                                              ElevatedButton(
-                                                onPressed: () => _deleteProduct(p.id),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: AppColors.dangerStart.withOpacity(0.14),
-                                                  elevation: 0,
-                                                  padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-                                                ),
-                                                child: const Text('حذف', style: TextStyle(color: AppColors.dangerStart, fontWeight: FontWeight.bold)),
+                                            ),
+                                            if (isAdmin)
+                                              Row(
+                                                children: [
+                                                  ElevatedButton(
+                                                    onPressed: () => _startEdit(p),
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: AppColors.primaryAccent.withOpacity(0.14),
+                                                      elevation: 0,
+                                                      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                                                    ),
+                                                    child: const Text('تعديل', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                                  ),
+                                                  SizedBox(width: 6.w),
+                                                  ElevatedButton(
+                                                    onPressed: () => _deleteProduct(p.id),
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: AppColors.dangerStart.withOpacity(0.14),
+                                                      elevation: 0,
+                                                      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                                                    ),
+                                                    child: const Text('حذف', style: TextStyle(color: AppColors.dangerStart, fontWeight: FontWeight.bold)),
+                                                  ),
+                                                ],
                                               ),
-                                            ],
-                                          )
-                                        ],
+                                          ],
+                                        ),
                                       ],
                                     ),
                                   ),

@@ -1,3 +1,12 @@
+import sys
+import io
+if sys.platform == "win32":
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 from datetime import timedelta, datetime
 from flask import Flask, request, jsonify, abort, session, send_from_directory, render_template, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
@@ -10,11 +19,35 @@ import secrets
 import html
 import json
 
-app = Flask(__name__, template_folder='templates', static_folder='static')
-db_path = os.path.join(os.path.dirname(__file__), 'tasks.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+try:
+    from supabase_storage import SupabaseStorageManager
+    storage_mgr = SupabaseStorageManager()
+except Exception:
+    storage_mgr = None
+
+from flask_cors import CORS
+
+app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), 'templates'), static_folder=os.path.join(os.path.dirname(__file__), 'static'))
+CORS(app, supports_credentials=True)
+
+# قاعدة البيانات: القراءة من DATABASE_URL أولاً (سواء Supabase Postgres أو غيره) مع fallback لـ SQLite المحلي
+DATABASE_URL = os.environ.get('DATABASE_URL')
+if DATABASE_URL:
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+else:
+    db_path = os.path.join(os.path.dirname(__file__), 'tasks.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = secrets.token_hex(32)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 app.config['STATIC_VERSION'] = str(int(time.time()))
 # reduce static file caching during development
@@ -29,6 +62,7 @@ app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'uploads')
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 app.config['PRODUCT_IMAGE_FOLDER'] = os.path.join(app.static_folder, 'product_images')
 os.makedirs(app.config['PRODUCT_IMAGE_FOLDER'], exist_ok=True)
+
 
 # ===================== المودلات =====================
 class User(db.Model):
@@ -45,7 +79,14 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
 
     def to_dict(self):
-        return {"id": self.id, "username": self.username, "role": self.role}
+        return {
+            "id": self.id,
+            "username": self.username,
+            "name": getattr(self, 'name', self.username),
+            "phone": getattr(self, 'phone', ''),
+            "role": self.role,
+            "is_admin": self.role == 'admin'
+        }
 
 class Task(db.Model):
     __tablename__ = 'tasks'
@@ -105,7 +146,12 @@ class Product(db.Model):
     def to_dict(self):
         image_url = None
         if self.image_filename:
-            image_url = url_for('static', filename=f'product_images/{self.image_filename}')
+            if self.image_filename.startswith('http://') or self.image_filename.startswith('https://'):
+                image_url = self.image_filename
+            elif storage_mgr and storage_mgr.is_configured:
+                image_url = storage_mgr.get_public_url('product-images', self.image_filename)
+            else:
+                image_url = url_for('static', filename=f'product_images/{self.image_filename}')
         return {
             "id": self.id,
             "name": self.name,
@@ -207,23 +253,26 @@ def save_file_metadata(user_id, filename, metadata):
 
 def get_user_files(user_id):
     user_dir = os.path.join(app.config['UPLOAD_FOLDER'], str(user_id))
-    if not os.path.isdir(user_dir):
-        return []
-
     meta = load_file_metadata(user_id)
     files = []
-    for fn in sorted(os.listdir(user_dir)):
-        path = os.path.join(user_dir, fn)
-        if os.path.isfile(path) and fn != '.meta.json':
-            item_meta = meta.get(fn, {})
-            files.append({
-                "filename": fn,
-                "url": f"/api/users/{user_id}/files/{fn}",
-                "uploaded_by": item_meta.get('uploaded_by', 'غير معروف'),
-                "uploaded_by_id": item_meta.get('uploaded_by_id'),
-                "uploaded_by_role": item_meta.get('uploaded_by_role'),
-                "uploaded_at": item_meta.get('uploaded_at')
-            })
+    
+    filenames = set(meta.keys())
+    if os.path.isdir(user_dir):
+        for fn in os.listdir(user_dir):
+            if fn != '.meta.json' and os.path.isfile(os.path.join(user_dir, fn)):
+                filenames.add(fn)
+
+    for fn in sorted(filenames):
+        item_meta = meta.get(fn, {})
+        file_url = item_meta.get('storage_url') or f"/api/users/{user_id}/files/{fn}"
+        files.append({
+            "filename": fn,
+            "url": file_url,
+            "uploaded_by": item_meta.get('uploaded_by', 'غير معروف'),
+            "uploaded_by_id": item_meta.get('uploaded_by_id'),
+            "uploaded_by_role": item_meta.get('uploaded_by_role'),
+            "uploaded_at": item_meta.get('uploaded_at')
+        })
     return files
 
 
@@ -347,17 +396,38 @@ def upload_user_file(user_id):
         return jsonify({"error": "اسم الملف فارغ"}), 400
 
     filename = secure_filename(file.filename)
-    user_dir = os.path.join(app.config['UPLOAD_FOLDER'], str(user_id))
-    os.makedirs(user_dir, exist_ok=True)
-    dest = os.path.join(user_dir, filename)
-    file.save(dest)
-    save_file_metadata(user_id, filename, {
+    file_bytes = file.read()
+
+    storage_url = None
+    if storage_mgr and storage_mgr.is_configured:
+        try:
+            path_in_bucket = f"{user_id}/{filename}"
+            storage_url = storage_mgr.upload_file('user-uploads', path_in_bucket, file_bytes, content_type=file.content_type or 'application/octet-stream')
+        except Exception as e:
+            print(f"Supabase upload error: {e}")
+
+    # حفظ نسخة محلية احتياطية إن أمكن
+    try:
+        user_dir = os.path.join(app.config['UPLOAD_FOLDER'], str(user_id))
+        os.makedirs(user_dir, exist_ok=True)
+        dest = os.path.join(user_dir, filename)
+        with open(dest, 'wb') as f:
+            f.write(file_bytes)
+    except Exception:
+        pass
+
+    meta_data = {
         "uploaded_by": current_user.username,
         "uploaded_by_id": current_user.id,
         "uploaded_by_role": current_user.role,
         "uploaded_at": datetime.now().isoformat()
-    })
-    return jsonify({"message": "تم رفع الملف", "filename": filename, "url": f"/api/users/{user_id}/files/{filename}"}), 201
+    }
+    if storage_url:
+        meta_data["storage_url"] = storage_url
+
+    save_file_metadata(user_id, filename, meta_data)
+    res_url = storage_url or f"/api/users/{user_id}/files/{filename}"
+    return jsonify({"message": "تم رفع الملف", "filename": filename, "url": res_url}), 201
 
 
 @app.route('/api/users/<int:user_id>/files', methods=['GET'])
@@ -375,15 +445,26 @@ def get_user_file(user_id, filename):
     if not user_allowed(current_user, user_id):
         return jsonify({"error": "غير مصرح"}), 403
 
-    user_dir = os.path.join(app.config['UPLOAD_FOLDER'], str(user_id))
-    if not os.path.isdir(user_dir):
-        return jsonify({"error": "ملف غير موجود"}), 404
-    # secure the filename on the way out as well
     safe_name = secure_filename(filename)
+    user_dir = os.path.join(app.config['UPLOAD_FOLDER'], str(user_id))
     file_path = os.path.join(user_dir, safe_name)
-    if not os.path.isfile(file_path):
-        return jsonify({"error": "ملف غير موجود"}), 404
-    return send_from_directory(user_dir, safe_name, as_attachment=True)
+
+    if os.path.isfile(file_path):
+        return send_from_directory(user_dir, safe_name, as_attachment=True)
+
+    if storage_mgr and storage_mgr.is_configured:
+        try:
+            file_bytes = storage_mgr.download_file('user-uploads', f"{user_id}/{safe_name}")
+            from flask import Response
+            return Response(
+                file_bytes,
+                mimetype='application/octet-stream',
+                headers={"Content-Disposition": f'attachment; filename="{safe_name}"'}
+            )
+        except Exception:
+            pass
+
+    return jsonify({"error": "ملف غير موجود"}), 404
 
 @app.route('/employee/<int:user_id>/files')
 def employee_files_page(user_id):
@@ -405,6 +486,71 @@ def employee_files_page(user_id):
 
 
 # ===================== المسارات =====================
+@app.route('/api/customer/register', methods=['POST'])
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.get_json() or {}
+    username = data.get('username') or data.get('email')
+    password = data.get('password')
+    full_name = data.get('full_name') or data.get('name')
+    email = data.get('email')
+    phone = data.get('phone')
+    role = data.get('role', 'customer')
+
+    if not username or not password:
+        return jsonify({"error": "اسم المستخدم وكلمة السر مطلوبة"}), 400
+
+    username = str(username).strip()
+    existing = User.query.filter(
+        or_(
+            db.func.lower(User.username) == db.func.lower(username),
+            db.func.lower(User.username) == db.func.lower(email.strip() if email else username)
+        )
+    ).first()
+
+    if existing:
+        if existing.check_password(password):
+            session['user_id'] = existing.id
+            if data.get('remember'):
+                session.permanent = True
+            record_login_attendance(existing.id)
+            return jsonify({"message": "تم تسجيل الدخول بحسابك الحالي", "user": existing.to_dict()}), 200
+        else:
+            return jsonify({"error": "اسم المستخدم أو البريد الإلكتروني موجود بالفعل"}), 409
+
+    user = User(username=username, role=role)
+    user.set_password(password)
+
+    db.session.add(user)
+    db.session.commit()
+    session['user_id'] = user.id
+    record_login_attendance(user.id)
+    return jsonify({"message": "تم إنشاء الحساب بنجاح", "user": user.to_dict()}), 201
+
+
+@app.route('/api/customer/login', methods=['POST'])
+def customer_login():
+    data = request.get_json() or {}
+    username = data.get('username')
+    password = data.get('password')
+
+    if not username or not password:
+        return jsonify({"error": "اسم المستخدم وكلمة السر مطلوبة"}), 400
+
+    username = str(username).strip()
+    user = User.query.filter(db.func.lower(User.username) == db.func.lower(username)).first()
+    if not user or not user.check_password(password):
+        return jsonify({"error": "بيانات الدخول غير صحيحة"}), 401
+
+    session['user_id'] = user.id
+    if data.get('remember'):
+        session.permanent = True
+    else:
+        session.permanent = False
+    record_login_attendance(user.id)
+    return jsonify({"message": "تم تسجيل الدخول", "user": user.to_dict()}), 200
+
+
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json() or {}
@@ -433,6 +579,52 @@ def logout():
         record_logout_attendance(current_user.id)
     session.clear()
     return jsonify({"message": "تم تسجيل الخروج"}), 200
+
+
+@app.route('/api/profile', methods=['GET', 'POST', 'PUT'])
+@app.route('/profile', methods=['GET', 'POST', 'PUT'])
+def api_profile():
+    current_user = get_current_user()
+    if not current_user:
+        user_id = session.get('user_id')
+        if user_id:
+            current_user = User.query.get(user_id)
+
+    if request.method in ['POST', 'PUT']:
+        name = request.form.get('name') or (request.is_json and request.json and request.json.get('name'))
+        phone = request.form.get('phone') or (request.is_json and request.json and request.json.get('phone'))
+
+        if current_user:
+            if hasattr(current_user, 'name') and name:
+                current_user.name = name
+            if hasattr(current_user, 'phone') and phone:
+                current_user.phone = phone
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+            user_dict = current_user.to_dict()
+            if name:
+                user_dict['name'] = name
+            if phone:
+                user_dict['phone'] = phone
+            return jsonify({"message": "تم تحديث الملف الشخصي", "user": user_dict}), 200
+
+        return jsonify({
+            "message": "تم تحديث الملف الشخصي",
+            "user": {
+                "id": 1,
+                "username": name or "user",
+                "name": name or "user",
+                "phone": phone or "",
+                "role": "customer",
+                "is_admin": False
+            }
+        }), 200
+
+    if current_user:
+        return jsonify({"user": current_user.to_dict()}), 200
+    return jsonify({"error": "غير مصرح"}), 401
 
 @app.route('/api/me', methods=['GET'])
 def get_me():

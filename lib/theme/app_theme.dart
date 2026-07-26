@@ -61,6 +61,14 @@ class AppTheme {
         buttonColor: AppColors.primaryAccent,
         textTheme: ButtonTextTheme.primary,
       ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primaryAccent,
+          foregroundColor: Colors.white,
+          elevation: 3,
+          textStyle: GoogleFonts.cairo(fontWeight: FontWeight.w700, fontSize: 16),
+        ),
+      ),
     );
   }
 }

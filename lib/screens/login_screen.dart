@@ -11,7 +11,10 @@ import '../widgets/radial_background.dart';
 import '../widgets/animations.dart';
 import 'admin/admin_dashboard.dart';
 import 'employee/employee_dashboard.dart';
-import 'products/public_catalog_screen.dart';
+import 'products/products_screen.dart';
+import 'home/home_screen.dart';
+import 'auth/register_screen.dart';
+import 'auth/forget_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -132,31 +135,51 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Future<void> _handleLogin() async {
+  void _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
     final authProvider = context.read<AuthProvider>();
-    
+
     final success = await authProvider.login(
       _usernameController.text.trim(),
       _passwordController.text,
       _rememberMe,
     );
 
-    if (success) {
+    if (success && mounted) {
       await _saveLoginCredentials();
-      if (!mounted) return;
-
       final user = authProvider.currentUser;
+      Widget targetScreen;
       if (user != null && user.isAdmin) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const AdminDashboard()),
-        );
+        targetScreen = const AdminDashboard();
+      } else if (user != null && user.isEmployee) {
+        targetScreen = const EmployeeDashboard();
       } else {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const EmployeeDashboard()),
-        );
+        targetScreen = const HomeScreen();
       }
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => targetScreen),
+      );
+    }
+  }
+
+  void _handleGoogleSignIn() async {
+    final authProvider = context.read<AuthProvider>();
+    final success = await authProvider.loginWithGoogle();
+
+    if (success && mounted) {
+      final user = authProvider.currentUser;
+      Widget targetScreen;
+      if (user != null && user.isAdmin) {
+        targetScreen = const AdminDashboard();
+      } else if (user != null && user.isEmployee) {
+        targetScreen = const EmployeeDashboard();
+      } else {
+        targetScreen = const HomeScreen();
+      }
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => targetScreen),
+      );
     }
   }
 
@@ -185,7 +208,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               SizedBox(height: 10.h),
 
-              // Logo + Header with staggered animation
+              // Logo + Header
               AnimatedEntrance(
                 delay: const Duration(milliseconds: 80),
                 child: Column(
@@ -210,7 +233,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     SizedBox(height: 8.h),
                     Text(
-                      'ادخل بياناتك للوصول إلى لوحة التحكم.',
+                      'ادخل بياناتك للوصول إلى حسابك والمنتجات.',
                       style: AppStyles.bodyMuted,
                       textAlign: TextAlign.center,
                     ),
@@ -259,7 +282,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           SizedBox(height: 20.h),
                         ],
-                        Text('اسم المستخدم', style: AppStyles.labelBold, textAlign: TextAlign.right),
+                        Text('اسم المستخدم أو البريد الإلكتروني', style: AppStyles.labelBold, textAlign: TextAlign.right),
                         SizedBox(height: 8.h),
                         TextFormField(
                           controller: _usernameController,
@@ -271,12 +294,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             }
                           },
                           decoration: const InputDecoration(
-                            hintText: 'أدخل اسم المستخدم',
+                            hintText: 'أدخل اسم المستخدم أو البريد الإلكتروني',
                             prefixIcon: Icon(Icons.person_outline, color: AppColors.textMuted),
                           ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
-                              return 'يرجى إدخال اسم المستخدم';
+                              return 'يرجى إدخال اسم المستخدم أو البريد';
                             }
                             return null;
                           },
@@ -315,26 +338,46 @@ class _LoginScreenState extends State<LoginScreen> {
                             return null;
                           },
                         ),
-                        SizedBox(height: 16.h),
+                        SizedBox(height: 12.h),
+
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Checkbox(
-                              value: _rememberMe,
-                              activeColor: AppColors.primaryAccent,
-                              checkColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4.r),
-                              ),
-                              onChanged: (value) => setState(() {
-                                _rememberMe = value ?? false;
-                              }),
+                            Row(
+                              children: [
+                                Checkbox(
+                                  value: _rememberMe,
+                                  activeColor: AppColors.primaryAccent,
+                                  checkColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4.r),
+                                  ),
+                                  onChanged: (value) => setState(() {
+                                    _rememberMe = value ?? false;
+                                  }),
+                                ),
+                                Text('تذكرني', style: AppStyles.bodyDefault),
+                              ],
                             ),
-                            Text('تذكرني على هذا الجهاز', style: AppStyles.bodyDefault),
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const ForgetPasswordScreen()),
+                                );
+                              },
+                              child: Text(
+                                'نسيت كلمة السر؟',
+                                style: AppStyles.bodyMuted.copyWith(
+                                  color: AppColors.primaryAccent,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                         SizedBox(height: 20.h),
-                        // Professional login button
+
+                        // Login button
                         AnimatedPressButton(
                           onTap: authProvider.isLoading ? null : _handleLogin,
                           child: Container(
@@ -359,8 +402,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 : Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(Icons.login_rounded,
-                                          color: Colors.white, size: 20.sp),
+                                      Icon(Icons.login_rounded, color: Colors.white, size: 20.sp),
                                       SizedBox(width: 10.w),
                                       Text(
                                         'تسجيل الدخول',
@@ -374,73 +416,51 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+                        SizedBox(height: 16.h),
 
-              SizedBox(height: 20.h),
-
-              // Public catalog button
-              AnimatedEntrance(
-                delay: const Duration(milliseconds: 350),
-                child: Center(
-                  child: AnimatedPressButton(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        PageRouteBuilder(
-                          pageBuilder: (_, __, ___) => const PublicCatalogScreen(),
-                          transitionsBuilder: (_, animation, __, child) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: SlideTransition(
-                                position: Tween<Offset>(
-                                  begin: const Offset(0, 0.05),
-                                  end: Offset.zero,
-                                ).animate(CurvedAnimation(
-                                  parent: animation,
-                                  curve: Curves.easeOutCubic,
-                                )),
-                                child: child,
-                              ),
-                            );
-                          },
-                          transitionDuration: const Duration(milliseconds: 350),
-                        ),
-                      );
-                    },
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16.r),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                        child: Container(
-                          padding: EdgeInsets.symmetric(horizontal: 28.w, vertical: 14.h),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryAccent.withOpacity(0.07),
-                            borderRadius: BorderRadius.circular(16.r),
-                            border: Border.all(
-                              color: AppColors.primaryAccent.withOpacity(0.18),
-                              width: 1.5,
+                        Row(
+                          children: [
+                            const Expanded(child: Divider(color: AppColors.borderLight)),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 12.w),
+                              child: Text('أو', style: AppStyles.bodyMuted),
                             ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.storefront_rounded,
-                                  color: AppColors.textMain, size: 20.sp),
-                              SizedBox(width: 10.w),
-                              Text(
-                                'عرض المنتجات للزبائن',
-                                style: AppStyles.labelBold.copyWith(
-                                  color: AppColors.textMain,
-                                  fontSize: 14.sp,
-                                ),
-                              ),
-                            ],
+                            const Expanded(child: Divider(color: AppColors.borderLight)),
+                          ],
+                        ),
+                        SizedBox(height: 16.h),
+
+                        // Google Sign-In Button
+                        OutlinedButton.icon(
+                          onPressed: authProvider.isLoading ? null : _handleGoogleSignIn,
+                          icon: Icon(Icons.g_mobiledata, size: 28.sp, color: AppColors.primaryAccent),
+                          label: Text('تسجيل بواسطة Google', style: AppStyles.labelBold),
+                          style: OutlinedButton.styleFrom(
+                            padding: EdgeInsets.symmetric(vertical: 12.h),
+                            side: const BorderSide(color: AppColors.borderMedium),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
                           ),
                         ),
-                      ),
+                        SizedBox(height: 16.h),
+
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text('ليس لديك حساب؟ ', style: AppStyles.bodyMuted),
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                                );
+                              },
+                              child: Text(
+                                'إنشاء حساب جديد',
+                                style: AppStyles.labelBold.copyWith(color: AppColors.primaryAccent),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),

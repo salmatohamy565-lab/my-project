@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_styles.dart';
@@ -8,6 +9,8 @@ import '../widgets/radial_background.dart';
 import 'login_screen.dart';
 import 'admin/admin_dashboard.dart';
 import 'employee/employee_dashboard.dart';
+import 'products/products_screen.dart';
+import 'home/home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -109,15 +112,17 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (isAuthenticated) {
       final user = authProvider.currentUser;
+      Widget targetScreen;
       if (user != null && user.isAdmin) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const AdminDashboard()),
-        );
+        targetScreen = const AdminDashboard();
+      } else if (user != null && user.isEmployee) {
+        targetScreen = const EmployeeDashboard();
       } else {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const EmployeeDashboard()),
-        );
+        targetScreen = const HomeScreen();
       }
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => targetScreen),
+      );
     } else {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -185,22 +190,6 @@ class _SplashScreenState extends State<SplashScreen>
                         ],
                       ),
                     ),
-                    const Spacer(),
-                    // Skip button
-                    if (_showContent)
-                      TextButton.icon(
-                        onPressed: () {
-                          _progressController.stop();
-                          _handleNavigation();
-                        },
-                        icon: const Icon(Icons.skip_next_rounded,
-                            color: AppColors.textMuted),
-                        label: Text(
-                          'تخطي',
-                          style: AppStyles.labelBold
-                              .copyWith(color: AppColors.textMuted),
-                        ),
-                      ),
                     SizedBox(height: 16.h),
                   ],
                 ),
@@ -227,8 +216,8 @@ class _SplashScreenState extends State<SplashScreen>
                         alignment: _logoController.isCompleted
                             ? Alignment.topLeft
                             : Alignment.center,
-                        child: Image.asset(
-                          'assets/bola_logo.png',
+                        child: SvgPicture.asset(
+                          'assets/logo2.svg',
                           width: screenWidth * 0.65,
                           fit: BoxFit.contain,
                         ),

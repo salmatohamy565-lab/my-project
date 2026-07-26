@@ -16,6 +16,7 @@ import '../../services/api_service.dart';
 import '../../widgets/radial_background.dart';
 import '../../widgets/custom_bottom_nav_bar.dart';
 import '../../widgets/app_logo_bar.dart';
+import '../products/products_screen.dart';
 
 class EmployeeDashboard extends StatefulWidget {
   const EmployeeDashboard({super.key});
@@ -165,6 +166,16 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
     final userProvider = context.watch<UserProvider>();
 
     final currentUser = authProvider.currentUser;
+    if (currentUser != null && currentUser.isCustomer) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => ProductsScreen()),
+          );
+        }
+      });
+    }
+
     final myTasks = taskProvider.tasks;
     final myFiles = userProvider.userFiles;
     final myAttendance = userProvider.userAttendance;

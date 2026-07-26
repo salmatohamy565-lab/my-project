@@ -1,0 +1,218 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
+import '../../constants/app_colors.dart';
+import '../../constants/app_styles.dart';
+import '../../providers/auth_provider.dart';
+import '../../widgets/radial_background.dart';
+import '../../widgets/animations.dart';
+import '../../widgets/app_logo_bar.dart';
+import '../admin/admin_dashboard.dart';
+import '../employee/employee_dashboard.dart';
+import '../products/products_screen.dart';
+import '../home/home_screen.dart';
+
+class CompleteProfileScreen extends StatefulWidget {
+  const CompleteProfileScreen({super.key});
+
+  @override
+  State<CompleteProfileScreen> createState() => _CompleteProfileScreenState();
+}
+
+class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _nameController;
+  late TextEditingController _phoneController;
+  File? _profilePhoto;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = context.read<AuthProvider>().currentUser;
+    _nameController = TextEditingController(text: user?.name ?? user?.username ?? '');
+    _phoneController = TextEditingController(text: user?.phone ?? '');
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  void _pickPhoto() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+    );
+    if (result != null && result.files.single.path != null) {
+      setState(() {
+        _profilePhoto = File(result.files.single.path!);
+      });
+    }
+  }
+
+  void _saveProfile() async {
+    if (_formKey.currentState != null && !_formKey.currentState!.validate()) return;
+    final authProvider = context.read<AuthProvider>();
+
+    try {
+      await authProvider.updateProfile(
+        name: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        photo: _profilePhoto,
+      ).timeout(const Duration(seconds: 2));
+    } catch (_) {}
+
+    if (mounted) {
+      final user = authProvider.currentUser;
+      Widget targetScreen;
+      if (user != null && user.isAdmin) {
+        targetScreen = const AdminDashboard();
+      } else if (user != null && user.isEmployee) {
+        targetScreen = const EmployeeDashboard();
+      } else {
+        targetScreen = const HomeScreen();
+      }
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => targetScreen),
+        (route) => false,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+
+    return Scaffold(
+      body: RadialBackground(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 16.h),
+            child: Column(
+              children: [
+                const AppLogoBar(),
+                SizedBox(height: 20.h),
+                AnimatedEntrance(
+                  child: Container(
+                    padding: EdgeInsets.all(24.w),
+                    decoration: BoxDecoration(
+                      color: AppColors.loginCardBg,
+                      border: Border.all(color: AppColors.borderMedium),
+                      borderRadius: BorderRadius.circular(28.r),
+                      boxShadow: AppStyles.cardShadow,
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'إكمال الملف الشخصي',
+                            style: AppStyles.titleLarge,
+                            textAlign: TextAlign.center,
+                          ),
+                          SizedBox(height: 6.h),
+                          Text(
+                            'أدخل معلوماتك الأساسية لتخصيص حسابك وسهولة التواصل',
+                            style: AppStyles.bodyMuted,
+                            textAlign: TextAlign.center,
+                          ),
+                          SizedBox(height: 20.h),
+
+                          // Avatar Picker
+                          Center(
+                            child: Stack(
+                              children: [
+                                CircleAvatar(
+                                  radius: 46.r,
+                                  backgroundColor: AppColors.primaryAccent.withOpacity(0.12),
+                                  backgroundImage: _profilePhoto != null
+                                      ? FileImage(_profilePhoto!) as ImageProvider
+                                      : null,
+                                  child: _profilePhoto == null
+                                      ? const Icon(Icons.person, size: 48, color: AppColors.primaryAccent)
+                                      : null,
+                                ),
+                                Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: GestureDetector(
+                                    onTap: _pickPhoto,
+                                    child: CircleAvatar(
+                                      radius: 16.r,
+                                      backgroundColor: AppColors.primaryAccent,
+                                      child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: 24.h),
+
+                          // Name Field
+                          TextFormField(
+                            controller: _nameController,
+                            textAlign: TextAlign.right,
+                            decoration: const InputDecoration(
+                              labelText: 'الاسم الكامل',
+                              prefixIcon: Icon(Icons.badge_outlined, color: AppColors.primaryAccent),
+                            ),
+                            validator: (val) {
+                              if (val == null || val.trim().isEmpty) return 'يرجى إدخال الاسم';
+                              return null;
+                            },
+                          ),
+                          SizedBox(height: 16.h),
+
+                          // Phone Field
+                          TextFormField(
+                            controller: _phoneController,
+                            keyboardType: TextInputType.phone,
+                            textAlign: TextAlign.right,
+                            decoration: const InputDecoration(
+                              labelText: 'رقم الموبايل',
+                              prefixIcon: Icon(Icons.phone_android_outlined, color: AppColors.primaryAccent),
+                            ),
+                            validator: (val) {
+                              if (val == null || val.trim().isEmpty) return 'يرجى إدخال رقم الموبايل';
+                              return null;
+                            },
+                          ),
+                          SizedBox(height: 24.h),
+
+                          ElevatedButton(
+                            onPressed: authProvider.isLoading ? null : _saveProfile,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryAccent,
+                              foregroundColor: Colors.white,
+                              elevation: 3,
+                              padding: EdgeInsets.symmetric(vertical: 14.h),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
+                            ),
+                            child: authProvider.isLoading
+                                ? SizedBox(
+                                    height: 20.h,
+                                    width: 20.w,
+                                    child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                  )
+                                : Text('حفظ والمتابعة', style: AppStyles.buttonText.copyWith(color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

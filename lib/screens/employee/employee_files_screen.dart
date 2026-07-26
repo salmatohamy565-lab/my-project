@@ -12,7 +12,6 @@ import '../../services/api_service.dart';
 import '../../widgets/radial_background.dart';
 import '../../widgets/app_logo_bar.dart';
 import '../../widgets/custom_bottom_nav_bar.dart';
-import '../../widgets/app_logo_bar.dart';
 
 class EmployeeFilesScreen extends StatefulWidget {
   const EmployeeFilesScreen({super.key});
