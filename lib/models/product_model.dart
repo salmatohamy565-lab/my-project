@@ -4,6 +4,7 @@ class ProductModel {
   final String description;
   final double price;
   final String? imageUrl;
+  final String? categoryId;
   final DateTime? createdAt;
 
   ProductModel({
@@ -12,6 +13,7 @@ class ProductModel {
     required this.description,
     required this.price,
     this.imageUrl,
+    this.categoryId,
     this.createdAt,
   });
 
@@ -22,6 +24,7 @@ class ProductModel {
       description: json['description'] ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
       imageUrl: json['image_url'],
+      categoryId: json['category_id'],
       createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at']) : null,
     );
   }
@@ -33,6 +36,7 @@ class ProductModel {
       'description': description,
       'price': price,
       'image_url': imageUrl,
+      'category_id': categoryId,
       'created_at': createdAt?.toIso8601String(),
     };
   }

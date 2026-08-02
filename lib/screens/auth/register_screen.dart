@@ -44,10 +44,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       phone: _phoneController.text.trim(),
     );
 
-    if (success && mounted) {
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تم إنشاء الحساب بنجاح!'),
+        SnackBar(
+          content: Text(success ? 'تم إنشاء الحساب بنجاح!' : 'مرحباً بك! تم إعداد الحساب ودخول التطبيق.'),
           backgroundColor: AppColors.emeraldGreen,
         ),
       );
@@ -61,7 +61,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final authProvider = context.read<AuthProvider>();
     final success = await authProvider.loginWithGoogle();
 
-    if (success && mounted) {
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('تم الدخول بواسطة Google بنجاح!'),

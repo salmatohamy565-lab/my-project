@@ -1,15 +1,17 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:file_picker/file_picker.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_styles.dart';
+import '../utils/web_file_picker.dart';
 
 class PaymentMethodsModal extends StatefulWidget {
   final String? productName;
   final double? productPrice;
-  final Function(String paymentMethod, String senderInfo, [File? proofFile])? onConfirmOrder;
+  final Function? onConfirmOrder;
 
   const PaymentMethodsModal({
     super.key,
@@ -22,7 +24,7 @@ class PaymentMethodsModal extends StatefulWidget {
     BuildContext context, {
     String? productName,
     double? productPrice,
-    Function(String paymentMethod, String senderInfo, [File? proofFile])? onConfirmOrder,
+    Function? onConfirmOrder,
   }) {
     showModalBottomSheet(
       context: context,
@@ -44,6 +46,8 @@ class _PaymentMethodsModalState extends State<PaymentMethodsModal> {
   String _selectedMethod = 'vodafone_cash';
   final TextEditingController _senderInfoController = TextEditingController();
   File? _proofFile;
+  Uint8List? _proofBytes;
+  String? _proofFileName;
 
   final String _vodafoneCashNumber = '01001696249';
   final String _instapayNumber = '01228569626';
@@ -61,33 +65,32 @@ class _PaymentMethodsModalState extends State<PaymentMethodsModal> {
 
   Future<void> _pickProofImage() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
-      );
+      final picked = await pickImageFile();
 
-      if (result != null && result.files.single.path != null) {
-        final platformFile = result.files.single;
-        final extension = platformFile.extension?.toLowerCase();
-
-        // 1. Validate File Format
-        if (extension == null || !['jpg', 'jpeg', 'png', 'webp'].contains(extension)) {
-          _showError('عفواً، يجب أن يكون إيصال التحويل صورة بصيغة (JPG, PNG, WEBP)');
-          return;
-        }
-
-        // 2. Validate File Size (Max 5MB)
-        if (platformFile.size > 5 * 1024 * 1024) {
+      if (picked != null) {
+        if (picked.bytes != null && picked.bytes!.length > 5 * 1024 * 1024) {
           _showError('عفواً، الحد الأقصى لحجم صورة الإيصال هو 5 ميجابايت');
           return;
         }
 
         setState(() {
-          _proofFile = File(platformFile.path!);
+          _proofBytes = picked.bytes;
+          _proofFileName = picked.name;
+          _proofFile = picked.file;
         });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✓ تم إرفاق صورة إيصال التحويل بنجاح!'),
+              backgroundColor: AppColors.emeraldGreen,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       }
     } catch (e) {
-      _showError('حدث خطأ أثناء اختيار ملف الصورة، يرجى المحاولة مرة أخرى');
+      _showError('حدث خطأ أثناء اختيار ملف الصورة: $e');
     }
   }
 
@@ -390,19 +393,20 @@ class _PaymentMethodsModalState extends State<PaymentMethodsModal> {
             // 3. Payment Proof Upload Section (InstaPay & Vodafone Cash)
             Text('إرفاق صورة إيصال التحويل (Screenshot):', style: AppStyles.labelBold.copyWith(fontSize: 12.sp)),
             SizedBox(height: 6.h),
-            GestureDetector(
+            InkWell(
               onTap: _pickProofImage,
+              borderRadius: BorderRadius.circular(14.r),
               child: Container(
                 padding: EdgeInsets.all(12.w),
                 decoration: BoxDecoration(
                   color: AppColors.inputBg,
                   borderRadius: BorderRadius.circular(14.r),
                   border: Border.all(
-                    color: _proofFile != null ? AppColors.successStart : AppColors.borderDark,
-                    width: _proofFile != null ? 1.5 : 1.0,
+                    color: (_proofBytes != null || _proofFile != null) ? AppColors.successStart : AppColors.borderDark,
+                    width: (_proofBytes != null || _proofFile != null) ? 1.5 : 1.0,
                   ),
                 ),
-                child: _proofFile == null
+                child: (_proofBytes == null && _proofFile == null)
                     ? Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -418,12 +422,21 @@ class _PaymentMethodsModalState extends State<PaymentMethodsModal> {
                         children: [
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8.r),
-                            child: Image.file(
-                              _proofFile!,
-                              width: 48.w,
-                              height: 48.w,
-                              fit: BoxFit.cover,
-                            ),
+                            child: _proofBytes != null
+                                ? Image.memory(
+                                    _proofBytes!,
+                                    width: 48.w,
+                                    height: 48.w,
+                                    fit: BoxFit.cover,
+                                  )
+                                : (_proofFile != null
+                                    ? Image.file(
+                                        _proofFile!,
+                                        width: 48.w,
+                                        height: 48.w,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : const Icon(Icons.check_circle, color: AppColors.successStart)),
                           ),
                           SizedBox(width: 12.w),
                           Expanded(
@@ -435,7 +448,7 @@ class _PaymentMethodsModalState extends State<PaymentMethodsModal> {
                                   style: TextStyle(color: AppColors.successStart, fontWeight: FontWeight.bold, fontSize: 12.sp),
                                 ),
                                 Text(
-                                  _proofFile!.path.split(Platform.pathSeparator).last,
+                                  _proofFileName ?? (_proofFile != null ? _proofFile!.path.split(Platform.pathSeparator).last : 'صورة الإيصال'),
                                   style: TextStyle(color: AppColors.textMuted, fontSize: 10.sp),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -444,7 +457,11 @@ class _PaymentMethodsModalState extends State<PaymentMethodsModal> {
                             ),
                           ),
                           IconButton(
-                            onPressed: () => setState(() => _proofFile = null),
+                            onPressed: () => setState(() {
+                              _proofFile = null;
+                              _proofBytes = null;
+                              _proofFileName = null;
+                            }),
                             icon: const Icon(Icons.cancel_outlined, color: AppColors.dangerStart),
                           ),
                         ],
@@ -474,7 +491,15 @@ class _PaymentMethodsModalState extends State<PaymentMethodsModal> {
                   final methodTitle = _selectedMethod == 'vodafone_cash' ? 'فودافون كاش' : 'انستاباي';
 
                   if (widget.onConfirmOrder != null) {
-                    widget.onConfirmOrder!(methodTitle, senderInfo, _proofFile);
+                    try {
+                      Function.apply(widget.onConfirmOrder!, [methodTitle, senderInfo, _proofFile, _proofBytes, _proofFileName]);
+                    } catch (_) {
+                      try {
+                        Function.apply(widget.onConfirmOrder!, [methodTitle, senderInfo, _proofFile]);
+                      } catch (_) {
+                        Function.apply(widget.onConfirmOrder!, [methodTitle, senderInfo]);
+                      }
+                    }
                   }
                   Navigator.of(context).pop();
                 },

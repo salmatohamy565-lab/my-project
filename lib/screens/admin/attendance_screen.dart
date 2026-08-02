@@ -44,13 +44,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
+            colorScheme: const ColorScheme.light(
               primary: AppColors.primaryAccent,
-              onPrimary: Colors.black,
-              surface: AppColors.loginCardBg,
-              onSurface: Colors.white,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
             ),
-            dialogBackgroundColor: AppColors.bgEnd,
+            dialogBackgroundColor: Colors.white,
           ),
           child: child!,
         );
@@ -108,7 +108,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final currentUser = authProvider.currentUser;
     final staffList = userProvider.users;
 
-    final supervisorsOnly = staffList.where((u) => u.role != 'admin').toList();
+    final supervisorsOnly = staffList.where((u) => u.role == 'employee' || u.role == 'supervisor').toList();
     final formattedDateText = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
     return Scaffold(

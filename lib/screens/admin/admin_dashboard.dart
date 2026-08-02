@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb, Uint8List;
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +14,10 @@ import '../../widgets/radial_background.dart';
 import '../../widgets/custom_bottom_nav_bar.dart';
 import '../../widgets/app_logo_bar.dart';
 import 'employee_detail_screen.dart';
+import 'admin_orders_screen.dart';
+import 'archived_tasks_screen.dart';
+import 'archived_files_screen.dart';
+import 'admin_files_screen.dart';
 import '../products/products_screen.dart';
 import '../employee/employee_dashboard.dart';
 
@@ -25,6 +30,7 @@ class AdminDashboard extends StatefulWidget {
 
 class _AdminDashboardState extends State<AdminDashboard> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final ScrollController _scrollController = ScrollController();
   
   // Forms Controllers
   final _usernameController = TextEditingController();
@@ -35,6 +41,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   int? _selectedUserForTask;
   int? _selectedUserForFile;
   File? _selectedFile;
+  Uint8List? _selectedFileBytes;
+  String? _selectedFileName;
 
   Timer? _statsTimer;
   bool _isArchiving = false;
@@ -88,6 +96,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _passwordController.dispose();
     _taskTitleController.dispose();
     _taskDescController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -146,10 +155,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Future<void> _selectFile() async {
     final result = await FilePicker.platform.pickFiles();
-    if (result != null && result.files.single.path != null) {
-      setState(() {
-        _selectedFile = File(result.files.single.path!);
-      });
+    if (result != null) {
+      if (kIsWeb) {
+        setState(() {
+          _selectedFileBytes = result.files.single.bytes;
+          _selectedFileName = result.files.single.name;
+        });
+      } else if (result.files.single.path != null) {
+        setState(() {
+          _selectedFile = File(result.files.single.path!);
+          _selectedFileName = result.files.single.name;
+        });
+      }
     }
   }
 
@@ -158,15 +175,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
       _showSnackbar('يرجى اختيار الموظف أولاً', Colors.red);
       return;
     }
-    if (_selectedFile == null) {
+    if (_selectedFile == null && _selectedFileBytes == null) {
       _showSnackbar('يرجى اختيار ملف للرفع', Colors.red);
       return;
     }
 
-    final success = await context.read<UserProvider>().uploadUserFile(_selectedUserForFile!, _selectedFile!);
+    final success = await context.read<UserProvider>().uploadUserFile(
+      _selectedUserForFile!,
+      file: _selectedFile,
+      fileBytes: _selectedFileBytes,
+      fileName: _selectedFileName,
+    );
     if (success) {
       setState(() {
         _selectedFile = null;
+        _selectedFileBytes = null;
+        _selectedFileName = null;
         _selectedUserForFile = null;
       });
       _showSnackbar('تم رفع الملف بنجاح', AppColors.successStart);
@@ -259,7 +283,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final staffList = userProvider.users;
     final activeTasks = taskProvider.tasks;
 
-    final supervisorsOnly = staffList.where((u) => u.role != 'admin').toList();
+    final supervisorsOnly = staffList.where((u) => u.role == 'employee' || u.role == 'supervisor').toList();
 
     return Scaffold(
       key: _scaffoldKey,
@@ -273,6 +297,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               child: RefreshIndicator(
                 onRefresh: _loadData,
                 child: SingleChildScrollView(
+                  controller: _scrollController,
                   padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 20.h),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -282,6 +307,60 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       Text(
                         'إدارة الموظفين، المهام، والمحتوى من مكان واحد',
                         style: AppStyles.bodyMuted,
+                      ),
+                      SizedBox(height: 16.h),
+
+                      // Admin Order Approvals Banner
+                      Container(
+                        padding: EdgeInsets.all(16.w),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [AppColors.secondaryAccent, AppColors.primaryAccent]),
+                          borderRadius: BorderRadius.circular(20.r),
+                          boxShadow: AppStyles.cardShadow,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(12.r),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.receipt_long_rounded, color: Colors.white, size: 28),
+                            ),
+                            SizedBox(width: 14.w),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'مراجعة طلبات العملاء والموافقات 📋',
+                                    style: AppStyles.titleSmall.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                                  ),
+                                  SizedBox(height: 2.h),
+                                  Text(
+                                    'معاينة صور إيصالات الدفع (InstaPay) والموافقة أو الرفض',
+                                    style: AppStyles.bodyMuted.copyWith(color: Colors.white70, fontSize: 11.sp),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            ElevatedButton(
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const AdminOrdersScreen()),
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: AppColors.primaryAccent,
+                                padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                              ),
+                              child: const Text('فتح الطلبات', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
                       ),
                       SizedBox(height: 20.h),
 
@@ -294,11 +373,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         mainAxisSpacing: 12.h,
                         childAspectRatio: 1.5,
                         children: [
-                          _buildStatCard('إجمالي الموظفين', '${stats['staff_count'] ?? 0}', Icons.people_outline),
-                          _buildStatCard('المهام الموكلة', '${stats['task_count'] ?? 0}', Icons.assignment_outlined),
-                          _buildStatCard('المهام المؤرشفة', '${stats['archived_count'] ?? 0}', Icons.archive_outlined),
-                          _buildStatCard('الملفات المرفوعة', '${stats['file_count'] ?? 0}', Icons.file_upload_outlined),
-                          _buildStatCard('الملفات المؤرشفة', '${stats['archived_files_count'] ?? 0}', Icons.folder_open_outlined),
+                          _buildStatCard('إجمالي الموظفين', '${stats['staff_count'] ?? 0}', Icons.people_outline, onTap: () {
+                            if (_scrollController.hasClients) {
+                              _scrollController.animateTo(540.h, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
+                            }
+                          }),
+                          _buildStatCard('المهام الموكلة', '${stats['task_count'] ?? 0}', Icons.assignment_outlined, onTap: () {
+                            if (_scrollController.hasClients) {
+                              _scrollController.animateTo(_scrollController.position.maxScrollExtent, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
+                            }
+                          }),
+                          _buildStatCard('المهام المؤرشفة', '${stats['archived_count'] ?? 0}', Icons.archive_outlined, onTap: () {
+                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ArchivedTasksScreen()));
+                          }),
+                          _buildStatCard('الملفات المرفوعة', '${stats['file_count'] ?? 0}', Icons.file_upload_outlined, onTap: () {
+                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdminFilesScreen()));
+                          }),
+                          _buildStatCard('الملفات المؤرشفة', '${stats['archived_files_count'] ?? 0}', Icons.folder_open_outlined, onTap: () {
+                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ArchivedFilesScreen()));
+                          }),
                         ],
                       ),
                       SizedBox(height: 24.h),
@@ -440,6 +533,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               onChanged: (val) {
                                 setState(() {
                                   _selectedUserForFile = val;
+                                  _selectedFile = null;
+                                  _selectedFileBytes = null;
+                                  _selectedFileName = null;
                                 });
                               },
                             ),
@@ -461,11 +557,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                     SizedBox(width: 10.w),
                                     Expanded(
                                       child: Text(
-                                        _selectedFile != null
-                                            ? _selectedFile!.path.split(Platform.pathSeparator).last
-                                            : 'اختر ملفاً للرفع',
+                                        _selectedFileName ?? 'اختر ملفاً للرفع',
                                         style: AppStyles.bodyDefault.copyWith(
-                                          color: _selectedFile != null ? Colors.white : AppColors.textMuted,
+                                          color: _selectedFileName != null ? Colors.white : AppColors.textMuted,
                                         ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -588,45 +682,49 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // Component Builders
-  Widget _buildStatCard(String label, String value, IconData icon) {
-    return Container(
-      padding: EdgeInsets.all(14.w),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.primaryAccent.withOpacity(0.16),
-            AppColors.secondaryAccent.withOpacity(0.14),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+  Widget _buildStatCard(String label, String value, IconData icon, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18.r),
+      child: Container(
+        padding: EdgeInsets.all(14.w),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.primaryAccent.withOpacity(0.16),
+              AppColors.secondaryAccent.withOpacity(0.14),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(color: AppColors.borderLight),
+          borderRadius: BorderRadius.circular(18.r),
         ),
-        border: Border.all(color: AppColors.borderLight),
-        borderRadius: BorderRadius.circular(18.r),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Icon(icon, color: AppColors.primaryAccent, size: 20),
-              Container(
-                width: 8.w,
-                height: 8.w,
-                decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.primaryAccent),
-              ),
-            ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: AppStyles.bodyMuted.copyWith(fontSize: 10.sp)),
-              SizedBox(height: 4.h),
-              Text(value, style: AppStyles.titleMedium.copyWith(fontSize: 18.sp)),
-            ],
-          ),
-        ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(icon, color: AppColors.primaryAccent, size: 20),
+                Container(
+                  width: 8.w,
+                  height: 8.w,
+                  decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.primaryAccent),
+                ),
+              ],
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: AppStyles.bodyMuted.copyWith(fontSize: 10.sp)),
+                SizedBox(height: 4.h),
+                Text(value, style: AppStyles.titleMedium.copyWith(fontSize: 18.sp)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

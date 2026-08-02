@@ -10,6 +10,7 @@ import '../../widgets/app_logo_bar.dart';
 import '../../widgets/custom_bottom_nav_bar.dart';
 import '../../widgets/payment_methods_modal.dart';
 import '../../widgets/radial_background.dart';
+import '../home/home_screen.dart';
 
 class CartScreen extends StatelessWidget {
   const CartScreen({super.key});
@@ -219,16 +220,22 @@ class CartScreen extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Icon(Icons.stars_rounded, color: AppColors.primaryAccent, size: 20.r),
-                      SizedBox(width: 8.w),
-                      Text(
-                        'لديك ${cartProvider.userLoyaltyPoints} نقطة ولاء (خصم 50 ج.م)',
-                        style: TextStyle(color: AppColors.textMain, fontSize: 11.sp, fontWeight: FontWeight.bold),
-                      ),
-                    ],
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Icon(Icons.stars_rounded, color: AppColors.primaryAccent, size: 20.r),
+                        SizedBox(width: 8.w),
+                        Expanded(
+                          child: Text(
+                            'لديك ${cartProvider.userLoyaltyPoints} نقطة ولاء (خصم 50 ج.م)',
+                            style: TextStyle(color: AppColors.textMain, fontSize: 11.sp, fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  SizedBox(width: 8.w),
                   ElevatedButton(
                     onPressed: () {
                       final success = cartProvider.redeemLoyaltyPoints();
@@ -285,15 +292,59 @@ class CartScreen extends StatelessWidget {
                     context,
                     productName: 'طلب سلة Bola Designs (${cartProvider.itemCount} منتجات)',
                     productPrice: cartProvider.grandTotal,
-                    onConfirmOrder: (methodTitle, senderInfo, [proofFile]) {
-                      cartProvider.addEarnedPoints(cartProvider.grandTotal);
-                      cartProvider.clearCart();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('✓ تم تأكيد الطلب بنجاح عبر $methodTitle!'),
-                          backgroundColor: AppColors.successStart,
-                        ),
-                      );
+                    onConfirmOrder: (methodTitle, senderInfo, [proofFile, proofBytes, proofFileName]) async {
+                      try {
+                        final itemsSummaryStr = cartProvider.items
+                            .map((i) => '${i.product.name} x${i.quantity}')
+                            .join(' • ');
+
+                        final productIdsStr = cartProvider.items
+                            .map((i) => i.product.id)
+                            .join(',');
+
+                        await ApiService().createOrder(
+                          productIds: productIdsStr,
+                          itemsSummary: itemsSummaryStr,
+                          paymentMethod: methodTitle,
+                          totalPrice: cartProvider.grandTotal,
+                          paymentProof: proofFile,
+                          paymentProofBytes: proofBytes,
+                          paymentProofName: proofFileName,
+                        );
+
+                        cartProvider.addEarnedPoints(cartProvider.grandTotal);
+                        cartProvider.clearCart();
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('🎉 تم إرسال الطلب وإثبات الدفع بنجاح! بانتظار موافقة الأدمن.', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold)),
+                              backgroundColor: AppColors.successStart,
+                              duration: Duration(seconds: 4),
+                            ),
+                          );
+
+                          Navigator.of(context).pushAndRemoveUntil(
+                            PageRouteBuilder(
+                              pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
+                              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                return FadeTransition(opacity: animation, child: child);
+                              },
+                              transitionDuration: const Duration(milliseconds: 150),
+                            ),
+                            (route) => false,
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('حدث خطأ أثناء إرسال الطلب: $e'),
+                              backgroundColor: AppColors.dangerStart,
+                            ),
+                          );
+                        }
+                      }
                     },
                   );
                 },

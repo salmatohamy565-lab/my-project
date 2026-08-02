@@ -5,10 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_styles.dart';
-import '../models/order_model.dart';
 import '../providers/auth_provider.dart';
-import '../providers/cart_provider.dart';
-import '../services/api_service.dart';
 import '../widgets/radial_background.dart';
 import '../widgets/custom_bottom_nav_bar.dart';
 import '../widgets/app_logo_bar.dart';
@@ -24,54 +21,21 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  final ApiService _apiService = ApiService();
-
-  List<OrderModel> _pendingOrders = [];
-  List<OrderModel> _cancelledOrders = [];
-  List<OrderModel> _cartOrders = [];
-  bool _isLoadingOrders = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _fetchOrders();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _fetchOrders() async {
-    setState(() => _isLoadingOrders = true);
-    try {
-      final resPending = await _apiService.getOrders(status: 'pending');
-      final resCancelled = await _apiService.getOrders(status: 'cancelled');
-      final resCart = await _apiService.getOrders(status: 'cart');
-
-      if (mounted) {
-        setState(() {
-          _pendingOrders = (resPending.data as List).map((e) => OrderModel.fromJson(e)).toList();
-          _cancelledOrders = (resCancelled.data as List).map((e) => OrderModel.fromJson(e)).toList();
-          _cartOrders = (resCart.data as List).map((e) => OrderModel.fromJson(e)).toList();
-          _isLoadingOrders = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _isLoadingOrders = false);
-    }
-  }
+class _ProfileScreenState extends State<ProfileScreen> {
 
   void _showEditProfileDialog(BuildContext context) {
     final authProvider = context.read<AuthProvider>();
     final user = authProvider.currentUser;
 
-    final nameCtrl = TextEditingController(text: user?.name ?? user?.username ?? '');
-    final phoneCtrl = TextEditingController(text: user?.phone ?? '');
+    final initialName = (user?.name != null && user!.name!.isNotEmpty)
+        ? user.name!
+        : ((user?.username != null && user!.username!.isNotEmpty) ? user!.username! : 'salma');
+    final initialPhone = (user?.phone != null && user!.phone!.isNotEmpty)
+        ? user.phone!
+        : '01271122860';
+
+    final nameCtrl = TextEditingController(text: initialName);
+    final phoneCtrl = TextEditingController(text: initialPhone);
     final emailCtrl = TextEditingController(text: user?.email ?? '');
     File? selectedPhoto;
 
@@ -192,6 +156,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     final authProvider = context.watch<AuthProvider>();
     final currentUser = authProvider.currentUser;
     final bool isAdmin = currentUser?.isAdmin ?? false;
+    final bool isCustomer = currentUser?.isCustomer ?? false;
 
     return Scaffold(
       body: RadialBackground(
@@ -262,152 +227,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       ),
                     ),
                     SizedBox(height: 16.h),
-
-                    // Loyalty Points & Rewards Card
-                    Consumer<CartProvider>(
-                      builder: (context, cartProvider, _) {
-                        final points = cartProvider.userLoyaltyPoints;
-                        final equivalentDiscount = (points / 5).toDouble();
-
-                        return Container(
-                          padding: EdgeInsets.all(18.r),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF343A40), Color(0xFF0A0A0A)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: AppStyles.cardRadius,
-                            border: Border.all(color: AppColors.borderDark, width: 1),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
-                                blurRadius: 12.r,
-                                offset: const Offset(0, 6),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: EdgeInsets.all(8.r),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withOpacity(0.15),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Icon(Icons.stars_rounded, color: Colors.white, size: 24.r),
-                                      ),
-                                      SizedBox(width: 10.w),
-                                      Text(
-                                        'نقاط المكافآت والخصم',
-                                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16.sp),
-                                      ),
-                                    ],
-                                  ),
-                                  Container(
-                                    padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(12.r),
-                                    ),
-                                    child: Text(
-                                      'رصيدك الحالي',
-                                      style: TextStyle(color: Colors.white, fontSize: 10.sp, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              SizedBox(height: 14.h),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '$points نقطة',
-                                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22.sp),
-                                      ),
-                                      Text(
-                                        'تساوي خصم بقيمة ${equivalentDiscount.toStringAsFixed(0)} ج.م على مشترياتك',
-                                        style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 11.sp),
-                                      ),
-                                    ],
-                                  ),
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('🛍️ يمكنك استخدام نقاطك للحصول على خصم مباشر داخل السلة عند الشراء!'),
-                                          backgroundColor: AppColors.primaryAccent,
-                                        ),
-                                      );
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.white,
-                                      foregroundColor: AppColors.primaryAccent,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                                    ),
-                                    child: const Text('تفاصيل النقاط', style: TextStyle(fontWeight: FontWeight.bold)),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                    SizedBox(height: 20.h),
-
-                    // Orders Header & Tabs
-                    Text(
-                      'طلباتك وسلة الشراء',
-                      style: AppStyles.labelBold.copyWith(fontSize: 15.sp),
-                    ),
-                    SizedBox(height: 10.h),
-
-                    Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.cardBg,
-                        borderRadius: BorderRadius.circular(16.r),
-                        border: Border.all(color: AppColors.borderLight),
-                      ),
-                      child: TabBar(
-                        controller: _tabController,
-                        labelColor: AppColors.primaryAccent,
-                        unselectedLabelColor: AppColors.textMuted,
-                        indicatorColor: AppColors.primaryAccent,
-                        indicatorWeight: 3,
-                        tabs: const [
-                          Tab(text: 'الطلبات الحالية'),
-                          Tab(text: 'الملغية'),
-                          Tab(text: 'السلة'),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: 14.h),
-
-                    // Orders List Views (Tab Bar View Container)
-                    SizedBox(
-                      height: 320.h,
-                      child: _isLoadingOrders
-                          ? const Center(child: CircularProgressIndicator())
-                          : TabBarView(
-                              controller: _tabController,
-                              children: [
-                                _buildOrdersList(_pendingOrders, 'لا توجد طلبات حالية معلقة'),
-                                _buildOrdersList(_cancelledOrders, 'لا توجد طلبات ملغية'),
-                                _buildOrdersList(_cartOrders, 'سلة الشراء فارغة'),
-                              ],
-                            ),
-                    ),
-                    SizedBox(height: 20.h),
 
                     // Actions List
                     Container(
@@ -494,95 +313,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildOrdersList(List<OrderModel> orders, String emptyMsg) {
-    if (orders.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.shopping_bag_outlined, size: 48.sp, color: AppColors.textMuted),
-            SizedBox(height: 8.h),
-            Text(emptyMsg, style: AppStyles.bodyMuted),
-          ],
-        ),
-      );
-    }
 
-    return RefreshIndicator(
-      onRefresh: _fetchOrders,
-      child: ListView.builder(
-        itemCount: orders.length,
-        itemBuilder: (ctx, idx) {
-          final order = orders[idx];
-          return Container(
-            margin: EdgeInsets.only(bottom: 10.h),
-            padding: EdgeInsets.all(12.w),
-            decoration: BoxDecoration(
-              color: AppColors.cardBg,
-              borderRadius: BorderRadius.circular(14.r),
-              border: Border.all(color: AppColors.borderLight),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('طلب #${order.id}', style: AppStyles.labelBold),
-                    SizedBox(height: 4.h),
-                    Text(
-                      'المبلغ: ${order.totalPrice.toStringAsFixed(2)} جنيه',
-                      style: AppStyles.bodyMuted.copyWith(color: AppColors.primaryAccent),
-                    ),
-                  ],
-                ),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                  decoration: BoxDecoration(
-                    color: _getStatusColor(order.status).withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(8.r),
-                  ),
-                  child: Text(
-                    _getStatusText(order.status),
-                    style: AppStyles.labelBold.copyWith(
-                      color: _getStatusColor(order.status),
-                      fontSize: 11.sp,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'pending':
-        return Colors.orange;
-      case 'cancelled':
-        return AppColors.dangerStart;
-      case 'cart':
-        return AppColors.primaryAccent;
-      default:
-        return AppColors.emeraldGreen;
-    }
-  }
-
-  String _getStatusText(String status) {
-    switch (status) {
-      case 'pending':
-        return 'قيد الانتظار';
-      case 'cancelled':
-        return 'ملغي';
-      case 'cart':
-        return 'في السلة';
-      default:
-        return status;
-    }
-  }
 
   Widget _buildListTile({
     required IconData icon,

@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +10,7 @@ import '../../widgets/radial_background.dart';
 import '../../widgets/app_logo_bar.dart';
 import '../../widgets/animations.dart';
 import '../../widgets/payment_methods_modal.dart';
+import '../../widgets/product_image_widget.dart';
 import '../login_screen.dart';
 
 class PublicCatalogScreen extends StatefulWidget {
@@ -288,54 +288,12 @@ class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  ClipRRect(
+                                  ProductImageWidget(
+                                    imageUrl: p.imageUrl,
+                                    baseUrl: authProvider.baseUrl,
+                                    height: 160.h,
+                                    fit: BoxFit.cover,
                                     borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
-                                    child: Container(
-                                      height: 160.h,
-                                      decoration: const BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [Color(0xFFF8FAFC), Color(0xFFF1F5F9)],
-                                        ),
-                                      ),
-                                      alignment: Alignment.center,
-                                      child: fullImageUrl != null
-                                          ? Image.network(
-                                              fullImageUrl,
-                                              fit: BoxFit.cover,
-                                              width: double.infinity,
-                                              height: double.infinity,
-                                              errorBuilder: (context, error, stackTrace) => Column(
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    Icons.color_lens_outlined,
-                                                    color: AppColors.primaryAccent.withOpacity(0.6),
-                                                    size: 44,
-                                                  ),
-                                                  SizedBox(height: 6.h),
-                                                  Text(
-                                                    'Bola Designs',
-                                                    style: AppStyles.bodyMuted.copyWith(fontSize: 11.sp),
-                                                  ),
-                                                ],
-                                              ),
-                                            )
-                                          : Column(
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Icon(
-                                                  Icons.image_outlined,
-                                                  color: AppColors.primaryAccent.withOpacity(0.4),
-                                                  size: 48,
-                                                ),
-                                                SizedBox(height: 6.h),
-                                                Text(
-                                                  'Bola Designs Catalog',
-                                                  style: AppStyles.bodyMuted.copyWith(fontSize: 11.sp),
-                                                ),
-                                              ],
-                                            ),
-                                    ),
                                   ),
                                   Padding(
                                     padding: EdgeInsets.all(16.w),

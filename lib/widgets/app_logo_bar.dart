@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_styles.dart';
+import 'notifications_modal.dart';
 
 /// Unified top bar used across all app screens.
 /// Shows the Bola Designs logo on the left and optional trailing widget on the right.
@@ -57,6 +58,12 @@ class AppLogoBar extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.end,
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  IconButton(
+                    icon: Icon(Icons.notifications_active_outlined, color: AppColors.primaryAccent, size: 24.r),
+                    onPressed: () => NotificationsModal.show(context),
+                    tooltip: 'الإشعارات',
+                  ),
+                  SizedBox(width: 4.w),
                   Flexible(
                     child: Text(
                       username!,
@@ -64,7 +71,7 @@ class AppLogoBar extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  SizedBox(width: 8.w),
+                  SizedBox(width: 6.w),
                   CircleAvatar(
                     radius: 16.r,
                     backgroundColor: AppColors.primaryAccent.withOpacity(0.08),

@@ -21,7 +21,7 @@ class CategoryModel {
   static const List<CategoryModel> defaultCategories = [
     CategoryModel(
       id: 'wedding',
-      title: 'مستلزمات افراح',
+      title: 'مستلزمات الأفراح',
       icon: Icons.favorite_rounded,
       gradientColors: [Color(0xFF343A40), Color(0xFF212529)],
       imageUrl: 'assets/product_images/wedding_invitation.jpg',

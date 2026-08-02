@@ -6,6 +6,8 @@ class FileModel {
   final String? uploadedByRole;
   final String? uploadedAt;
   final int? userId; // For archived files which return user_id
+  final int? recipientId;
+  final String? recipientName;
 
   FileModel({
     required this.filename,
@@ -15,6 +17,8 @@ class FileModel {
     this.uploadedByRole,
     this.uploadedAt,
     this.userId,
+    this.recipientId,
+    this.recipientName,
   });
 
   factory FileModel.fromJson(Map<String, dynamic> json) {
@@ -26,6 +30,8 @@ class FileModel {
       uploadedByRole: json['uploaded_by_role'],
       uploadedAt: json['uploaded_at'],
       userId: json['user_id'],
+      recipientId: json['recipient_id'],
+      recipientName: json['recipient_name'],
     );
   }
 
@@ -38,6 +44,8 @@ class FileModel {
       'uploaded_by_role': uploadedByRole,
       'uploaded_at': uploadedAt,
       'user_id': userId,
+      'recipient_id': recipientId,
+      'recipient_name': recipientName,
     };
   }
 

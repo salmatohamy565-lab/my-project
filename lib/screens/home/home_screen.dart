@@ -25,7 +25,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final PageController _bannerController = PageController();
+  late final PageController _bannerController;
   int _currentBannerIndex = 0;
   Timer? _bannerTimer;
 
@@ -98,20 +98,29 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _bannerController = PageController(initialPage: 900);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ProductProvider>().fetchProducts();
     });
 
-    _bannerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
-      if (_bannerController.hasClients) {
-        final nextPage = (_currentBannerIndex + 1) % _banners.length;
-        _bannerController.animateToPage(
-          nextPage,
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeInOut,
+    _bannerTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+      if (_bannerController.hasClients && _bannerController.page != null) {
+        _bannerController.nextPage(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.fastOutSlowIn,
         );
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    for (final banner in _banners) {
+      if (banner.imageUrl.startsWith('assets/')) {
+        precacheImage(AssetImage(banner.imageUrl), context);
+      }
+    }
   }
 
   @override
@@ -126,20 +135,13 @@ class _HomeScreenState extends State<HomeScreen> {
       return _buildPlaceholderIcon();
     }
     if (imagePath.startsWith('assets/')) {
-      final filename = imagePath.split('/').last;
-      final serverUrl = 'http://127.0.0.1:5001/static/product_images/$filename';
-      return Image.network(
-        serverUrl,
+      return Image.asset(
+        imagePath,
         fit: fit,
         width: width,
         height: height,
-        errorBuilder: (_, __, ___) => Image.asset(
-          imagePath,
-          fit: fit,
-          width: width,
-          height: height,
-          errorBuilder: (_, __, ___) => _buildPlaceholderIcon(),
-        ),
+        gaplessPlayback: true,
+        errorBuilder: (_, __, ___) => _buildPlaceholderIcon(),
       );
     }
     final fullUrl = imagePath.startsWith('http') ? imagePath : ApiService().baseUrl + imagePath;
@@ -148,6 +150,7 @@ class _HomeScreenState extends State<HomeScreen> {
       fit: fit,
       width: width,
       height: height,
+      gaplessPlayback: true,
       errorBuilder: (_, __, ___) => _buildPlaceholderIcon(),
     );
   }
@@ -246,12 +249,11 @@ class _HomeScreenState extends State<HomeScreen> {
             controller: _bannerController,
             onPageChanged: (index) {
               setState(() {
-                _currentBannerIndex = index;
+                _currentBannerIndex = index % _banners.length;
               });
             },
-            itemCount: _banners.length,
             itemBuilder: (context, index) {
-              final banner = _banners[index];
+              final banner = _banners[index % _banners.length];
               return Container(
                 margin: EdgeInsets.symmetric(horizontal: 20.w),
                 decoration: BoxDecoration(
@@ -524,9 +526,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(
                   child: Stack(
                     children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(18.r)),
-                        child: Positioned.fill(
+                      Positioned.fill(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(18.r)),
                           child: _buildSmartImage(
                             product.imageUrl,
                             fit: BoxFit.cover,
@@ -597,7 +599,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '${product.price.toStringAsFixed(0)} ج.م',
+                                '${product.price % 1 == 0 ? product.price.toInt() : product.price.toStringAsFixed(2)} ج.م',
                                 style: TextStyle(
                                   color: AppColors.primaryAccent,
                                   fontWeight: FontWeight.bold,

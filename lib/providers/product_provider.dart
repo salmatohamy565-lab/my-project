@@ -94,13 +94,13 @@ class ProductProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> addProduct(String name, String description, double price, File? imageFile) async {
+  Future<bool> addProduct(String name, String description, double price, File? imageFile, {String? categoryId}) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final response = await _apiService.createProduct(name, description, price, imageFile);
+      final response = await _apiService.createProduct(name, description, price, imageFile, categoryId: categoryId);
       if (response.statusCode == 201) {
         _isLoading = false;
         await fetchProducts();
@@ -116,13 +116,13 @@ class ProductProvider extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> editProduct(int productId, String name, String description, double price, File? imageFile) async {
+  Future<bool> editProduct(int productId, String name, String description, double price, File? imageFile, {String? categoryId}) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final response = await _apiService.updateProduct(productId, name, description, price, imageFile);
+      final response = await _apiService.updateProduct(productId, name, description, price, imageFile, categoryId: categoryId);
       if (response.statusCode == 200) {
         _isLoading = false;
         await fetchProducts();

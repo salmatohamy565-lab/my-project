@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import '../models/file_model.dart';
@@ -165,13 +167,25 @@ class UserProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> uploadUserFile(int userId, File file) async {
+  Future<bool> uploadUserFile(
+    int userId, {
+    File? file,
+    Uint8List? fileBytes,
+    String? fileName,
+    int? recipientId,
+  }) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final response = await _apiService.uploadUserFile(userId, file);
+      final response = await _apiService.uploadUserFile(
+        userId,
+        file: file,
+        fileBytes: fileBytes,
+        fileName: fileName,
+        recipientId: recipientId,
+      );
       if (response.statusCode == 201) {
         _isLoading = false;
         await fetchUserFiles(userId);

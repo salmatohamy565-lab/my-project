@@ -168,14 +168,7 @@ class _SplashScreenState extends State<SplashScreen>
                             style: AppStyles.titleMedium,
                             textAlign: TextAlign.center,
                           ),
-                          SizedBox(height: 12.h),
-                          Text(
-                            'نجهز لك واجهة احترافية لإدارة المهام والموظفين.',
-                            style: AppStyles.bodyDefault
-                                .copyWith(color: AppColors.textMuted),
-                            textAlign: TextAlign.center,
-                          ),
-                          SizedBox(height: 32.h),
+                          SizedBox(height: 24.h),
                           // Progress bar
                           ClipRRect(
                             borderRadius: BorderRadius.circular(999.r),

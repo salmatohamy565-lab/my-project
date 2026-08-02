@@ -105,6 +105,12 @@ class AuthProvider extends ChangeNotifier {
       final response = await _apiService.login(usernameOrEmail, password, remember);
       if (response.statusCode == 200) {
         _currentUser = UserModel.fromJson(response.data['user']);
+        final token = (response.data != null && response.data['token'] != null)
+            ? response.data['token'].toString()
+            : _currentUser?.id.toString();
+        if (token != null) {
+          await _apiService.saveToken(token);
+        }
         _isLoading = false;
         notifyListeners();
         return true;

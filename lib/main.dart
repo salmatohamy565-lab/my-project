@@ -8,6 +8,7 @@ import 'providers/user_provider.dart';
 import 'providers/task_provider.dart';
 import 'providers/product_provider.dart';
 import 'providers/cart_provider.dart';
+import 'providers/order_provider.dart';
 import 'screens/splash_screen.dart';
 import 'theme/app_theme.dart';
 
@@ -25,6 +26,7 @@ void main() async {
         ChangeNotifierProvider<TaskProvider>(create: (_) => TaskProvider()),
         ChangeNotifierProvider<ProductProvider>(create: (_) => ProductProvider()),
         ChangeNotifierProvider<CartProvider>(create: (_) => CartProvider()),
+        ChangeNotifierProvider<OrderProvider>(create: (_) => OrderProvider()),
       ],
       child: const MyApp(),
     ),

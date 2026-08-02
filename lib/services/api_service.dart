@@ -1,5 +1,6 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -7,7 +8,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class ApiService {
   final Dio _dio = Dio();
   final _secureStorage = const FlutterSecureStorage();
-  String _baseUrl = kIsWeb ? 'http://localhost:5001' : 'http://192.168.1.18:5001';
+  static const String _defaultProdUrl = 'https://bola-designs-backend.onrender.com';
+  String _baseUrl = kReleaseMode ? _defaultProdUrl : _defaultProdUrl;
   String? _cookie;
   String? _token;
 
@@ -50,8 +52,7 @@ class ApiService {
             err.error is SocketException) {
           
           final candidateUrls = [
-            'https://8863521f63018d26-197-59-149-44.serveousercontent.com',
-            'http://127.0.0.1:5001',
+            'https://bola-designs-backend.onrender.com',
             'http://192.168.1.18:5001',
             'http://10.0.2.2:5001',
             'http://localhost:5001',
@@ -83,7 +84,7 @@ class ApiService {
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    _baseUrl = kIsWeb ? 'http://localhost:5001' : 'https://8863521f63018d26-197-59-149-44.serveousercontent.com';
+    _baseUrl = kIsWeb ? 'http://localhost:5001' : 'http://192.168.1.18:5001';
     String? storedUrl = prefs.getString('api_base_url');
     if (storedUrl != null &&
         storedUrl.isNotEmpty &&
@@ -130,11 +131,10 @@ class ApiService {
     } catch (_) {}
 
     final candidates = [
-      'https://8863521f63018d26-197-59-149-44.serveousercontent.com',
       'http://127.0.0.1:5001',
+      'http://localhost:5001',
       'http://192.168.1.18:5001',
       'http://10.0.2.2:5001',
-      'http://localhost:5001',
     ];
 
     for (final candidate in candidates) {
@@ -328,7 +328,7 @@ class ApiService {
     try {
       final response = await _dio.get(
         '/orders',
-        queryParameters: status != null ? {'status': status} : null,
+        queryParameters: status != null && status != 'all' ? {'status': status} : null,
       );
       return response;
     } on DioException catch (e) {
@@ -336,13 +336,73 @@ class ApiService {
     }
   }
 
-  Future<Response> createOrder({required dynamic productIds, String status = 'pending', double totalPrice = 0.0}) async {
+  Future<Response> createOrder({
+    required dynamic productIds,
+    String itemsSummary = '',
+    String paymentMethod = 'instapay',
+    double totalPrice = 0.0,
+    File? paymentProof,
+    Uint8List? paymentProofBytes,
+    String? paymentProofName,
+  }) async {
     try {
-      final response = await _dio.post('/orders', data: {
-        'product_ids': productIds,
-        'status': status,
-        'total_price': totalPrice,
-      });
+      final Map<String, dynamic> dataMap = {
+        'product_ids': productIds.toString(),
+        'items_summary': itemsSummary,
+        'payment_method': paymentMethod,
+        'total_price': totalPrice.toString(),
+      };
+
+      if (paymentProofBytes != null && paymentProofName != null && paymentProofName.isNotEmpty) {
+        dataMap['payment_proof'] = MultipartFile.fromBytes(
+          paymentProofBytes,
+          filename: paymentProofName,
+        );
+      } else if (paymentProof != null && paymentProof.path.isNotEmpty) {
+        final fileName = paymentProof.path.split(paymentProof.path.contains('\\') ? '\\' : '/').last;
+        dataMap['payment_proof'] = await MultipartFile.fromFile(paymentProof.path, filename: fileName);
+      }
+
+      final formData = FormData.fromMap(dataMap);
+      final response = await _dio.post(
+        '/orders',
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return response;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Response> updateOrderStatus(int orderId, String status, {String? reason}) async {
+    try {
+      final response = await _dio.put(
+        '/orders/$orderId/status',
+        data: {
+          'status': status,
+          if (reason != null) 'rejection_reason': reason,
+        },
+      );
+      return response;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  // Notifications APIs
+  Future<Response> getNotifications() async {
+    try {
+      final response = await _dio.get('/notifications');
+      return response;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Response> markNotificationsRead() async {
+    try {
+      final response = await _dio.put('/notifications/mark-read');
       return response;
     } on DioException catch (e) {
       throw _handleError(e);
@@ -474,12 +534,31 @@ class ApiService {
     }
   }
 
-  Future<Response> uploadUserFile(int userId, File file) async {
+  Future<Response> uploadUserFile(
+    int userId, {
+    File? file,
+    Uint8List? fileBytes,
+    String? fileName,
+    int? recipientId,
+  }) async {
     try {
-      final fileName = file.path.split(file.path.contains('\\') ? '\\' : '/').last;
-      final formData = FormData.fromMap({
-        'file': await MultipartFile.fromFile(file.path, filename: fileName),
-      });
+      MultipartFile multipartFile;
+      if (kIsWeb && fileBytes != null && fileName != null) {
+        multipartFile = MultipartFile.fromBytes(fileBytes, filename: fileName);
+      } else if (file != null) {
+        final name = fileName ?? file.path.split(file.path.contains('\\') ? '\\' : '/').last;
+        multipartFile = await MultipartFile.fromFile(file.path, filename: name);
+      } else {
+        throw Exception('No file or file bytes provided');
+      }
+
+      final map = <String, dynamic>{
+        'file': multipartFile,
+      };
+      if (recipientId != null) {
+        map['recipient_id'] = recipientId;
+      }
+      final formData = FormData.fromMap(map);
       final response = await _dio.post(
         '/users/$userId/files',
         data: formData,
@@ -534,12 +613,13 @@ class ApiService {
     }
   }
 
-  Future<Response> createProduct(String name, String description, double price, File? imageFile) async {
+  Future<Response> createProduct(String name, String description, double price, File? imageFile, {String? categoryId}) async {
     try {
       final Map<String, dynamic> dataMap = {
         'name': name,
         'description': description,
         'price': price.toString(),
+        if (categoryId != null) 'category_id': categoryId,
       };
 
       if (imageFile != null) {
@@ -559,12 +639,13 @@ class ApiService {
     }
   }
 
-  Future<Response> updateProduct(int productId, String name, String description, double price, File? imageFile) async {
+  Future<Response> updateProduct(int productId, String name, String description, double price, File? imageFile, {String? categoryId}) async {
     try {
       final Map<String, dynamic> dataMap = {
         'name': name,
         'description': description,
         'price': price.toString(),
+        if (categoryId != null) 'category_id': categoryId,
       };
 
       if (imageFile != null) {
