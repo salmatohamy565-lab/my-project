@@ -1,0 +1,10 @@
+{
+  "design_template_sample.txt": {
+    "uploaded_by": "employee",
+    "uploaded_by_id": 43,
+    "uploaded_by_role": "employee",
+    "uploaded_at": "2026-07-30T16:09:00.382530",
+    "recipient_id": 44,
+    "recipient_name": "mohamed"
+  }
+}

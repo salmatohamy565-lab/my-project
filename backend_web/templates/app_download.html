@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تحميل تطبيق Bola Designs - بولا ديزاينز</title>
+
+    <!-- Google Fonts & Font Awesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Cairo', sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            color: #0a0a0a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .download-container {
+            background: #ffffff;
+            border-radius: 28px;
+            padding: 40px 30px;
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e9ecef;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 140px;
+            background: linear-gradient(135deg, #0a0a0a 0%, #2b2d31 100%);
+            z-index: 1;
+        }
+
+        .content-box {
+            position: relative;
+            z-index: 2;
+        }
+
+        .logo-wrapper {
+            width: 100px;
+            height: 100px;
+            background: #ffffff;
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 30px auto 15px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+            padding: 10px;
+            border: 3px solid #ffffff;
+        }
+
+        .logo-wrapper img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .app-title {
+            font-size: 26px;
+            font-weight: 800;
+            color: #0a0a0a;
+            margin: 10px 0 5px;
+        }
+
+        .app-sub {
+            color: #5c6066;
+            font-size: 15px;
+            margin-bottom: 25px;
+            font-weight: 600;
+        }
+
+        .qr-card {
+            background: #f8f9fa;
+            border: 2px dashed #ced4da;
+            padding: 20px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        .qr-card img {
+            width: 180px;
+            height: 180px;
+            display: block;
+            border-radius: 12px;
+        }
+
+        .qr-hint {
+            font-size: 13px;
+            color: #5c6066;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-weight: 600;
+        }
+
+        .download-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #0a0a0a 0%, #2b2d31 100%);
+            color: #ffffff;
+            text-decoration: none;
+            font-size: 18px;
+            font-weight: 800;
+            border-radius: 18px;
+            box-shadow: 0 8px 20px rgba(10, 10, 10, 0.25);
+            transition: all 0.3s ease;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 25px rgba(10, 10, 10, 0.35);
+            background: linear-gradient(135deg, #2b8a3e 0%, #40c057 100%);
+        }
+
+        .footer-note {
+            margin-top: 25px;
+            padding-top: 15px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            color: #5c6066;
+        }
+
+        .footer-note a {
+            color: #0a0a0a;
+            font-weight: 700;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="download-container">
+        <div class="header-bg"></div>
+
+        <div class="content-box">
+            <div class="logo-wrapper">
+                <img src="/static/bola_logo.png" alt="Bola Designs Logo" onerror="this.src='/static/logo_dark.png'">
+            </div>
+
+            <h1 class="app-title">Bola Designs - بولا ديزاينز</h1>
+            <div class="app-sub">حمل التطبيق الآن لإدارة وتصفح التصاميم والطلبات</div>
+
+            <div class="qr-card">
+                <img id="qrImage" src="" alt="QR Code للتحميل">
+            </div>
+
+            <div class="qr-hint">
+                <i class="fa-solid fa-qrcode"></i>
+                <span>امسحي الـ QR Code بكاميرا الموبايل للتحميل المباشر</span>
+            </div>
+
+            <a href="/download/app-release.apk" class="download-btn">
+                <i class="fa-solid fa-download"></i>
+                <span>حمل التطبيق الآن (APK)</span>
+            </a>
+
+            <div class="footer-note">
+                <span>تطبيق أندرويد رسمي v1.0.0</span>
+                <a href="/privacy-policy" target="_blank">سياسة الخصوصية</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const downloadUrl = window.location.origin + '/download/app-release.apk';
+        const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(downloadUrl)}&color=0a0a0a`;
+        document.getElementById('qrImage').src = qrApiUrl;
+    </script>
+</body>
+</html>

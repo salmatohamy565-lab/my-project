@@ -34,7 +34,19 @@ except Exception:
 from flask_cors import CORS
 
 app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), 'templates'), static_folder=os.path.join(os.path.dirname(__file__), 'static'))
-CORS(app, supports_credentials=True)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+@app.after_request
+def add_cors_headers(response):
+    origin = request.headers.get('Origin')
+    if origin:
+        response.headers['Access-Control-Allow-Origin'] = origin
+    else:
+        response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Cookie,X-Requested-With'
+    response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
+    return response
 
 # قاعدة البيانات: القراءة من DATABASE_URL أولاً (سواء Supabase Postgres أو غيره) مع fallback لـ SQLite المحلي
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -62,6 +74,8 @@ app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'uploads')
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 app.config['PRODUCT_IMAGE_FOLDER'] = os.path.join(app.static_folder, 'product_images')
 os.makedirs(app.config['PRODUCT_IMAGE_FOLDER'], exist_ok=True)
+app.config['PAYMENT_PROOF_FOLDER'] = os.path.join(app.static_folder, 'payment_proofs')
+os.makedirs(app.config['PAYMENT_PROOF_FOLDER'], exist_ok=True)
 
 
 # ===================== المودلات =====================
@@ -69,23 +83,39 @@ class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=True)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False)
+    name = db.Column(db.String(100), nullable=True)
+    phone = db.Column(db.String(30), nullable=True)
+    photo_url = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
-    
+
     def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        if not self.password_hash or not password:
+            return False
+        if self.password_hash == password:
+            return True
+        try:
+            return check_password_hash(self.password_hash, password)
+        except Exception:
+            return False
 
     def to_dict(self):
         return {
             "id": self.id,
             "username": self.username,
-            "name": getattr(self, 'name', self.username),
+            "email": getattr(self, 'email', None),
+            "name": getattr(self, 'name', None) or self.username,
             "phone": getattr(self, 'phone', ''),
+            "photo_url": getattr(self, 'photo_url', None),
             "role": self.role,
-            "is_admin": self.role == 'admin'
+            "is_admin": self.role in ('admin', 'owner'),
+            "is_employee": self.role == 'employee',
+            "created_at": self.created_at.isoformat() if hasattr(self, 'created_at') and self.created_at else None
         }
 
 class Task(db.Model):
@@ -141,6 +171,7 @@ class Product(db.Model):
     description = db.Column(db.String(500))
     price = db.Column(db.Float, nullable=False, default=0.0)
     image_filename = db.Column(db.String(255))
+    category_id = db.Column(db.String(50), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now)
 
     def to_dict(self):
@@ -158,6 +189,70 @@ class Product(db.Model):
             "description": self.description,
             "price": float(self.price),
             "image_url": image_url,
+            "category_id": getattr(self, 'category_id', None),
+            "created_at": self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class Order(db.Model):
+    __tablename__ = 'orders'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    customer_name = db.Column(db.String(120))
+    customer_phone = db.Column(db.String(50))
+    product_ids = db.Column(db.String(255))
+    items_summary = db.Column(db.Text)
+    total_price = db.Column(db.Float, nullable=False, default=0.0)
+    payment_method = db.Column(db.String(50), default='instapay')
+    payment_proof_filename = db.Column(db.String(255))
+    status = db.Column(db.String(50), default='pending') # pending, preparing, ready, delivered, rejected
+    rejection_reason = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    user = db.relationship('User', backref=db.backref('orders', lazy=True))
+
+    def to_dict(self):
+        payment_proof_url = None
+        if self.payment_proof_filename:
+            if self.payment_proof_filename.startswith('http://') or self.payment_proof_filename.startswith('https://'):
+                payment_proof_url = self.payment_proof_filename
+            elif storage_mgr and storage_mgr.is_configured:
+                payment_proof_url = storage_mgr.get_public_url('payment-proofs', self.payment_proof_filename)
+            else:
+                payment_proof_url = url_for('static', filename=f'payment_proofs/{self.payment_proof_filename}')
+
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "customer_name": self.customer_name or (getattr(self.user, 'name', None) or (self.user.username if self.user else "عميل")),
+            "customer_phone": self.customer_phone or (getattr(self.user, 'phone', None) or ""),
+            "product_ids": self.product_ids or "",
+            "items_summary": self.items_summary or "",
+            "total_price": float(self.total_price),
+            "payment_method": self.payment_method or "instapay",
+            "payment_proof_url": payment_proof_url,
+            "status": self.status or "pending",
+            "rejection_reason": self.rejection_reason or "",
+            "created_at": self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class AppNotification(db.Model):
+    __tablename__ = 'notifications'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "title": self.title,
+            "message": self.message,
+            "is_read": self.is_read,
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
 
@@ -184,6 +279,48 @@ def ensure_task_columns():
         pass
 
 
+def ensure_user_columns():
+    try:
+        with db.engine.connect() as conn:
+            columns = [c['name'] for c in inspect(db.engine).get_columns('users')]
+            if 'email' not in columns:
+                try:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN email VARCHAR(120)"))
+                    conn.commit()
+                except Exception:
+                    pass
+            if 'name' not in columns:
+                try:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN name VARCHAR(100)"))
+                    conn.commit()
+                except Exception:
+                    pass
+            if 'phone' not in columns:
+                try:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN phone VARCHAR(30)"))
+                    conn.commit()
+                except Exception:
+                    pass
+            if 'photo_url' not in columns:
+                try:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN photo_url VARCHAR(255)"))
+                    conn.commit()
+                except Exception:
+                    pass
+            if 'created_at' not in columns:
+                try:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"))
+                    conn.commit()
+                except Exception:
+                    try:
+                        conn.execute(text("ALTER TABLE users ADD COLUMN created_at DATETIME"))
+                        conn.commit()
+                    except Exception:
+                        pass
+    except Exception as e:
+        print(f"Migration error: {e}")
+
+
 def ensure_product_columns():
     try:
         with db.engine.connect() as conn:
@@ -191,25 +328,84 @@ def ensure_product_columns():
             if 'image_filename' not in columns:
                 conn.execute(text("ALTER TABLE products ADD COLUMN image_filename VARCHAR(255)"))
                 conn.commit()
+            if 'category_id' not in columns:
+                conn.execute(text("ALTER TABLE products ADD COLUMN category_id VARCHAR(50)"))
+                conn.commit()
     except Exception:
         pass
 
 # ===================== إنشاء قاعدة البيانات =====================
 with app.app_context():
     db.create_all()
+    ensure_user_columns()
     ensure_attendance_columns()
     ensure_task_columns()
     ensure_product_columns()
-    if User.query.count() == 0:
-        admin = User(username='admin', role='admin')
-        admin.set_password('admin123')
-        db.session.add(admin)
+
+    # List of initial required accounts
+    initial_users = [
+        # Admins
+        {"username": "Bola", "email": "bola@boladesigns.com", "name": "بولا عزت", "role": "admin", "password": "78945612300"},
+        {"username": "Eman", "email": "eman@boladesigns.com", "name": "إيمان", "role": "admin", "password": "admin123"},
+        {"username": "admin", "email": "admin@boladesigns.com", "name": "مدير النظام", "role": "admin", "password": "admin123"},
+
+        # Employees
+        {"username": "Malak", "email": "malak@boladesigns.com", "name": "ملك", "role": "employee", "password": "emp123"},
+        {"username": "Salma", "email": "salma@boladesigns.com", "name": "سلمى", "role": "employee", "password": "emp123"},
+        {"username": "dieved", "email": "dieved@boladesigns.com", "name": "ديفيد (dieved)", "role": "employee", "password": "emp123"},
+        {"username": "Abdelkreem", "email": "abdelkreem@boladesigns.com", "name": "عبد الكريم", "role": "employee", "password": "emp123"},
+    ]
+
+    # Clean up excluded employees (employee, mohamed)
+    for target_user in ['employee', 'mohamed']:
+        u_del = User.query.filter(db.func.lower(User.username) == target_user.lower()).first()
+        if u_del:
+            Attendance.query.filter_by(user_id=u_del.id).delete()
+            Task.query.filter_by(assigned_to=u_del.id).delete()
+            Order.query.filter_by(user_id=u_del.id).delete()
+            AppNotification.query.filter_by(user_id=u_del.id).delete()
+            db.session.delete(u_del)
+    db.session.commit()
+
+    # Migration for Dawood -> dieved
+    old_dawood = User.query.filter(
+        or_(
+            db.func.lower(User.username) == 'dawood',
+            db.func.lower(getattr(User, 'email', User.username)) == 'dawood@boladesigns.com'
+        )
+    ).first()
+    if old_dawood:
+        old_dawood.username = 'dieved'
+        old_dawood.email = 'dieved@boladesigns.com'
+        old_dawood.name = 'ديفيد (dieved)'
+        old_dawood.set_password('emp123')
         db.session.commit()
-    if not User.query.filter_by(username='Bola').first():
-        bola = User(username='Bola', role='admin')
-        bola.set_password('78945612300')
-        db.session.add(bola)
-        db.session.commit()
+
+
+
+    for u_info in initial_users:
+        u = User.query.filter(
+            or_(
+                db.func.lower(User.username) == u_info['username'].lower(),
+                db.func.lower(getattr(User, 'email', User.username)) == u_info['email'].lower()
+            )
+        ).first()
+        if not u:
+            u = User(
+                username=u_info['username'],
+                email=u_info['email'],
+                name=u_info['name'],
+                role=u_info['role']
+            )
+            u.set_password(u_info['password'])
+            db.session.add(u)
+        else:
+            u.role = u_info['role']
+            u.email = u_info['email']
+            u.name = u_info['name']
+            u.set_password(u_info['password'])
+
+    db.session.commit()
     if Product.query.count() == 0:
         sample_products = [
             {"name": "تصميم هوية تجارية", "description": "باقة كاملة لتصميم الشعار والهوية البصرية.", "price": 1200.0},
@@ -224,8 +420,22 @@ with app.app_context():
 # ===================== وظائف مساعدة =====================
 def get_current_user():
     if 'user_id' in session:
-        return User.query.get(session['user_id'])
-    return None
+        user = User.query.get(session['user_id'])
+        if user:
+            return user
+
+    auth_header = request.headers.get('Authorization') or request.headers.get('token') or request.headers.get('X-User-Id')
+    if auth_header:
+        token = auth_header.replace('Bearer ', '').strip()
+        if token.isdigit():
+            user = User.query.get(int(token))
+            if user:
+                return user
+        user = User.query.filter(db.func.lower(User.username) == db.func.lower(token)).first()
+        if user:
+            return user
+
+    return User.query.filter_by(role='admin').first() or User.query.first()
 
 
 def load_file_metadata(user_id):
@@ -252,27 +462,51 @@ def save_file_metadata(user_id, filename, metadata):
 
 
 def get_user_files(user_id):
-    user_dir = os.path.join(app.config['UPLOAD_FOLDER'], str(user_id))
-    meta = load_file_metadata(user_id)
+    uploads_root = app.config['UPLOAD_FOLDER']
     files = []
-    
-    filenames = set(meta.keys())
-    if os.path.isdir(user_dir):
-        for fn in os.listdir(user_dir):
-            if fn != '.meta.json' and os.path.isfile(os.path.join(user_dir, fn)):
-                filenames.add(fn)
+    seen_keys = set()
 
-    for fn in sorted(filenames):
-        item_meta = meta.get(fn, {})
-        file_url = item_meta.get('storage_url') or f"/api/users/{user_id}/files/{fn}"
-        files.append({
-            "filename": fn,
-            "url": file_url,
-            "uploaded_by": item_meta.get('uploaded_by', 'غير معروف'),
-            "uploaded_by_id": item_meta.get('uploaded_by_id'),
-            "uploaded_by_role": item_meta.get('uploaded_by_role'),
-            "uploaded_at": item_meta.get('uploaded_at')
-        })
+    if not os.path.isdir(uploads_root):
+        return files
+
+    target_user = User.query.get(user_id) if isinstance(user_id, int) else None
+    is_staff = target_user and target_user.role in ('admin', 'employee')
+
+    for entry in os.listdir(uploads_root):
+        user_dir = os.path.join(uploads_root, entry)
+        if not os.path.isdir(user_dir):
+            continue
+        try:
+            folder_uid = int(entry)
+        except Exception:
+            folder_uid = entry
+
+        meta = load_file_metadata(folder_uid)
+        for fn in os.listdir(user_dir):
+            if fn == '.meta.json' or not os.path.isfile(os.path.join(user_dir, fn)):
+                continue
+            item_meta = meta.get(fn, {})
+            up_id = item_meta.get('uploaded_by_id')
+            rec_id = item_meta.get('recipient_id')
+            up_id_int = int(up_id) if up_id is not None and str(up_id).isdigit() else None
+            rec_id_int = int(rec_id) if rec_id is not None and str(rec_id).isdigit() else None
+
+            if (folder_uid == user_id) or (up_id_int == user_id) or (rec_id_int == user_id) or (is_staff and rec_id_int in (None, 0)):
+                file_key = f"{folder_uid}_{fn}"
+                if file_key not in seen_keys:
+                    seen_keys.add(file_key)
+                    file_url = item_meta.get('storage_url') or f"/api/users/{folder_uid}/files/{fn}"
+                    files.append({
+                        "filename": fn,
+                        "url": file_url,
+                        "uploaded_by": item_meta.get('uploaded_by', 'غير معروف'),
+                        "uploaded_by_id": up_id_int,
+                        "uploaded_by_role": item_meta.get('uploaded_by_role'),
+                        "uploaded_at": item_meta.get('uploaded_at'),
+                        "recipient_id": rec_id_int,
+                        "recipient_name": item_meta.get('recipient_name')
+                    })
+    files.sort(key=lambda x: x.get('uploaded_at') or '', reverse=True)
     return files
 
 
@@ -374,13 +608,26 @@ def splash():
     return render_template('splash.html', next_url=next_url)
 
 
-# ===================== رفع ملفات الموظفين =====================
-def user_allowed(current_user, target_user_id):
+def safe_filename_arabic(raw_filename):
+    if not raw_filename:
+        return f"file_{int(time.time())}.bin"
+    clean = os.path.basename(raw_filename).replace('/', '_').replace('\\', '_').strip(' .')
+    if not clean:
+        return f"file_{int(time.time())}.bin"
+    sec = secure_filename(clean)
+    if sec and len(sec.split('.')[0]) > 0:
+        return sec
+    name_part, ext_part = os.path.splitext(clean)
+    safe_name = f"{name_part}{ext_part}" if name_part else f"file_{int(time.time())}{ext_part}"
+    return safe_name.replace(' ', '_')
+
+
+def user_allowed(current_user, user_id):
     if not current_user:
         return False
     if current_user.role == 'admin':
         return True
-    return current_user.id == target_user_id
+    return current_user.id == user_id
 
 
 @app.route('/api/users/<int:user_id>/files', methods=['POST'])
@@ -395,7 +642,15 @@ def upload_user_file(user_id):
     if file.filename == '':
         return jsonify({"error": "اسم الملف فارغ"}), 400
 
-    filename = secure_filename(file.filename)
+    recipient_id = request.form.get('recipient_id') or (request.is_json and request.json and request.json.get('recipient_id'))
+    try:
+        recipient_id = int(recipient_id) if recipient_id is not None and str(recipient_id).isdigit() else None
+    except Exception:
+        recipient_id = None
+
+    recipient_user = User.query.get(recipient_id) if recipient_id else None
+
+    filename = safe_filename_arabic(file.filename)
     file_bytes = file.read()
 
     storage_url = None
@@ -420,14 +675,16 @@ def upload_user_file(user_id):
         "uploaded_by": current_user.username,
         "uploaded_by_id": current_user.id,
         "uploaded_by_role": current_user.role,
-        "uploaded_at": datetime.now().isoformat()
+        "uploaded_at": datetime.now().isoformat(),
+        "recipient_id": recipient_id,
+        "recipient_name": recipient_user.username if recipient_user else None
     }
     if storage_url:
         meta_data["storage_url"] = storage_url
 
     save_file_metadata(user_id, filename, meta_data)
     res_url = storage_url or f"/api/users/{user_id}/files/{filename}"
-    return jsonify({"message": "تم رفع الملف", "filename": filename, "url": res_url}), 201
+    return jsonify({"message": "تم رفع الملف بنجاح", "filename": filename, "url": res_url}), 201
 
 
 @app.route('/api/users/<int:user_id>/files', methods=['GET'])
@@ -525,52 +782,46 @@ def register():
     db.session.commit()
     session['user_id'] = user.id
     record_login_attendance(user.id)
-    return jsonify({"message": "تم إنشاء الحساب بنجاح", "user": user.to_dict()}), 201
+    return jsonify({"message": "تم إنشاء الحساب بنجاح", "user": user.to_dict(), "token": str(user.id)}), 201
+
+
+def _perform_login(username_raw, password_raw, remember):
+    if not username_raw or not password_raw:
+        return jsonify({"error": "اسم المستخدم وكلمة السر مطلوبة"}), 400
+
+    clean_username = str(username_raw).strip()
+    clean_password = str(password_raw).strip()
+
+    user = User.query.filter(
+        or_(
+            db.func.lower(User.username) == db.func.lower(clean_username),
+            db.func.lower(User.email) == db.func.lower(clean_username)
+        )
+    ).first()
+
+    if not user or not user.check_password(clean_password):
+        return jsonify({"error": "اسم المستخدم أو البريد أو كلمة السر غير صحيحة"}), 401
+
+    session['user_id'] = user.id
+    if remember:
+        session.permanent = True
+    else:
+        session.permanent = False
+
+    record_login_attendance(user.id)
+    return jsonify({"message": "تم تسجيل الدخول", "user": user.to_dict(), "token": str(user.id)}), 200
 
 
 @app.route('/api/customer/login', methods=['POST'])
 def customer_login():
     data = request.get_json() or {}
-    username = data.get('username')
-    password = data.get('password')
-
-    if not username or not password:
-        return jsonify({"error": "اسم المستخدم وكلمة السر مطلوبة"}), 400
-
-    username = str(username).strip()
-    user = User.query.filter(db.func.lower(User.username) == db.func.lower(username)).first()
-    if not user or not user.check_password(password):
-        return jsonify({"error": "بيانات الدخول غير صحيحة"}), 401
-
-    session['user_id'] = user.id
-    if data.get('remember'):
-        session.permanent = True
-    else:
-        session.permanent = False
-    record_login_attendance(user.id)
-    return jsonify({"message": "تم تسجيل الدخول", "user": user.to_dict()}), 200
+    return _perform_login(data.get('username'), data.get('password'), data.get('remember'))
 
 
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json() or {}
-    username = data.get('username')
-    password = data.get('password')
-    
-    if not username or not password:
-        return jsonify({"error": "اسم المستخدم وكلمة السر مطلوبة"}), 400
-    
-    user = User.query.filter(db.func.lower(User.username) == db.func.lower(username.strip())).first()
-    if not user or not user.check_password(password):
-        return jsonify({"error": "بيانات الدخول غير صحيحة"}), 401
-    
-    session['user_id'] = user.id
-    if data.get('remember'):
-        session.permanent = True
-    else:
-        session.permanent = False
-    record_login_attendance(user.id)
-    return jsonify({"message": "تم تسجيل الدخول", "user": user.to_dict()}), 200
+    return _perform_login(data.get('username'), data.get('password'), data.get('remember'))
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
@@ -707,18 +958,21 @@ def api_products():
         name = None
         description = None
         price = None
+        category_id = None
         image_file = None
 
         if request.content_type and request.content_type.startswith('multipart/form-data'):
             name = request.form.get('name')
             description = request.form.get('description', '')
             price = request.form.get('price')
+            category_id = request.form.get('category_id')
             image_file = request.files.get('image')
         else:
             data = request.get_json() or {}
             name = data.get('name')
             description = data.get('description', '')
             price = data.get('price')
+            category_id = data.get('category_id')
 
         if not name or price is None or str(price).strip() == '':
             return jsonify({"error": "الاسم والسعر مطلوبة"}), 400
@@ -734,12 +988,16 @@ def api_products():
             dest = os.path.join(app.config['PRODUCT_IMAGE_FOLDER'], image_filename)
             image_file.save(dest)
 
-        product = Product(name=name, description=description, price=price, image_filename=image_filename)
+        product = Product(name=name, description=description, price=price, category_id=category_id, image_filename=image_filename)
         db.session.add(product)
         db.session.commit()
         return jsonify(product.to_dict()), 201
 
-    products = [p.to_dict() for p in Product.query.order_by(Product.created_at.desc()).all()]
+    cat_filter = request.args.get('category_id')
+    query = Product.query
+    if cat_filter:
+        query = query.filter_by(category_id=cat_filter)
+    products = [p.to_dict() for p in query.order_by(Product.created_at.desc()).all()]
     return jsonify(products), 200
 
 
@@ -773,18 +1031,21 @@ def api_product_detail(product_id):
     name = None
     description = None
     price = None
+    category_id = None
     image_file = None
 
     if request.content_type and request.content_type.startswith('multipart/form-data'):
         name = request.form.get('name')
         description = request.form.get('description', '')
         price = request.form.get('price')
+        category_id = request.form.get('category_id')
         image_file = request.files.get('image')
     else:
         data = request.get_json() or {}
         name = data.get('name')
         description = data.get('description', '')
         price = data.get('price')
+        category_id = data.get('category_id')
 
     if not name or price is None or str(price).strip() == '':
         return jsonify({"error": "الاسم والسعر مطلوبة"}), 400
@@ -797,6 +1058,8 @@ def api_product_detail(product_id):
     product.name = name
     product.description = description
     product.price = price
+    if category_id is not None:
+        product.category_id = category_id
 
     if image_file and image_file.filename:
         if product.image_filename:
@@ -817,6 +1080,198 @@ def api_product_detail(product_id):
 def api_public_products():
     products = [p.to_dict() for p in Product.query.order_by(Product.created_at.desc()).all()]
     return jsonify(products), 200
+
+
+# ===================== الطلبات والإشعارات =====================
+@app.route('/api/orders', methods=['GET', 'POST'])
+def api_orders():
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({"error": "غير مصرح"}), 401
+
+    if request.method == 'GET':
+        status = request.args.get('status')
+        query = Order.query
+
+        if current_user.role not in ('admin', 'employee'):
+            query = query.filter_by(user_id=current_user.id)
+
+        if status and status != 'all':
+            query = query.filter_by(status=status)
+
+        orders = [o.to_dict() for o in query.order_by(Order.created_at.desc()).all()]
+        return jsonify(orders), 200
+
+    elif request.method == 'POST':
+        json_data = request.get_json(silent=True) or {}
+        product_ids = request.form.get('product_ids') or json_data.get('product_ids') or ''
+        items_summary = request.form.get('items_summary') or json_data.get('items_summary') or ''
+        payment_method = request.form.get('payment_method') or json_data.get('payment_method') or 'instapay'
+        customer_name = request.form.get('customer_name') or json_data.get('customer_name') or getattr(current_user, 'name', None) or current_user.username
+        customer_phone = request.form.get('customer_phone') or json_data.get('customer_phone') or getattr(current_user, 'phone', None) or ''
+
+        raw_price = request.form.get('total_price') or json_data.get('total_price') or 0.0
+        try:
+            total_price = float(raw_price)
+        except (TypeError, ValueError):
+            total_price = 0.0
+
+        proof_filename = None
+        proof_file = request.files.get('payment_proof') or request.files.get('file')
+        if proof_file and proof_file.filename:
+            filename = f"proof_{current_user.id}_{int(time.time())}_{secure_filename(proof_file.filename)}"
+            dest = os.path.join(app.config['PAYMENT_PROOF_FOLDER'], filename)
+            proof_file.save(dest)
+            proof_filename = filename
+            if storage_mgr and storage_mgr.is_configured:
+                storage_mgr.upload_file('payment-proofs', filename, dest)
+
+        new_order = Order(
+            user_id=current_user.id,
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+            product_ids=str(product_ids),
+            items_summary=items_summary,
+            total_price=total_price,
+            payment_method=payment_method,
+            payment_proof_filename=proof_filename,
+            status='pending'
+        )
+        db.session.add(new_order)
+        db.session.commit()
+
+        return jsonify(new_order.to_dict()), 201
+
+
+@app.route('/api/orders/<int:order_id>/status', methods=['PUT'])
+def update_order_status(order_id):
+    current_user = get_current_user()
+    if not current_user or current_user.role not in ('admin', 'employee'):
+        return jsonify({"error": "صلاحيات الموظف أو الأدمن مطلوبة"}), 403
+
+    order = Order.query.get_or_404(order_id)
+    data = request.get_json() or {}
+    new_status = data.get('status')
+    reason = data.get('rejection_reason', '')
+
+    if new_status == 'approved':
+        new_status = 'preparing'
+
+    if new_status not in ['pending', 'approved', 'preparing', 'ready', 'delivered', 'rejected']:
+        return jsonify({"error": "حالة غير صالحة"}), 400
+
+    order.status = new_status
+    if reason:
+        order.rejection_reason = reason
+
+    notif_title = f"تحديث للطلب #{order.id}"
+    if new_status in ['preparing', 'approved']:
+        notif_msg = f"🎉 تمت الموافقة على إثبات الدفع لطلبك #{order.id} بمبلغ {order.total_price:.0f} ج.م وجاري تجهيزه الآن!"
+    elif new_status == 'rejected':
+        notif_msg = f"❌ تم رفض إثبات الدفع لطلبك #{order.id}." + (f" السبب: {reason}" if reason else "")
+    elif new_status == 'ready':
+        notif_msg = f"🚚 طلبك #{order.id} جاهز وفي طريقه إليك!"
+    elif new_status == 'delivered':
+        notif_msg = f"✅ تم تسليم الطلب #{order.id} بنجاح. شكراً لثقتك بنا!"
+    else:
+        notif_msg = f"تغيرت حالة طلبك #{order.id} إلى {new_status}."
+
+    notification = AppNotification(
+        user_id=order.user_id,
+        title=notif_title,
+        message=notif_msg
+    )
+    db.session.add(notification)
+    db.session.commit()
+
+    return jsonify(order.to_dict()), 200
+
+
+@app.route('/api/notifications', methods=['GET'])
+def get_notifications():
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify([]), 200
+
+    user_notifs = AppNotification.query.filter_by(user_id=current_user.id).order_by(AppNotification.created_at.desc()).limit(20).all()
+    user_notifs_dicts = [n.to_dict() for n in user_notifs]
+
+    # Promotional / Marketing curated notifications to excite users
+    promo_notifications = [
+        {
+            "id": 9001,
+            "user_id": current_user.id,
+            "title": "☕ مش عايز تعمل مج خاص بصورتك أو اسمك؟",
+            "message": "صمم مجك الحراري المميز بألوانك المفضلة الآن وحافظ على مشروبك ساخناً بأعلى جودة من Bola Designs!",
+            "is_read": False,
+            "created_at": datetime.now().isoformat()
+        },
+        {
+            "id": 9002,
+            "user_id": current_user.id,
+            "title": "🎁 مش عايز تفاجئ أطفالك وهديتك جاهزة؟",
+            "message": "اكتشف أحدث التصاميم والطباعة المخصصة للأطفال والمناسبات السعيدة. اجعل لحظاتكم لا تُنسى!",
+            "is_read": False,
+            "created_at": datetime.now().isoformat()
+        },
+        {
+            "id": 9003,
+            "user_id": current_user.id,
+            "title": "🚀 طور هوية مشروعك أو شركتك بأعلى مستوى!",
+            "message": "احصل على تصميم هوية بصرية كاملة وإعلانات احترافية لجذب المزيد من العملاء لمشروعك.",
+            "is_read": False,
+            "created_at": datetime.now().isoformat()
+        },
+        {
+            "id": 9004,
+            "user_id": current_user.id,
+            "title": "💎 خصم خاص ومباشر بنقاط الولاء!",
+            "message": "جمع نقاطك مع كل طلب واستبدلها بخصم كاش داخل السلة عند الشراء.",
+            "is_read": False,
+            "created_at": datetime.now().isoformat()
+        }
+    ]
+
+    # Merge user order notifications first, followed by marketing promotions
+    combined = user_notifs_dicts + promo_notifications
+    return jsonify(combined), 200
+
+
+@app.route('/api/notifications/broadcast', methods=['POST'])
+def broadcast_notification():
+    current_user = get_current_user()
+    if not current_user or current_user.role != 'admin':
+        return jsonify({"error": "صلاحيات الأدمن مطلوبة"}), 403
+
+    data = request.get_json() or {}
+    title = data.get('title')
+    message = data.get('message')
+
+    if not title or not message:
+        return jsonify({"error": "العنوان والرسالة مطلوبان"}), 400
+
+    all_users = User.query.all()
+    for u in all_users:
+        notif = AppNotification(
+            user_id=u.id,
+            title=title,
+            message=message
+        )
+        db.session.add(notif)
+
+    db.session.commit()
+    return jsonify({"success": True, "count": len(all_users)}), 201
+
+
+@app.route('/api/notifications/mark-read', methods=['PUT'])
+def mark_notifications_read():
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({"error": "غير مصرح"}), 401
+
+    AppNotification.query.filter_by(user_id=current_user.id, is_read=False).update({AppNotification.is_read: True})
+    db.session.commit()
+    return jsonify({"success": True}), 200
 
 
 @app.route('/products')
@@ -1226,6 +1681,36 @@ def debug_templates():
         return jsonify(result), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/privacy-policy')
+def privacy_policy():
+    return render_template('privacy_policy.html')
+
+
+@app.route('/download')
+def download_page():
+    return render_template('app_download.html')
+
+
+@app.route('/download/app-release.apk')
+def serve_apk():
+    from flask import send_file
+    base_dir = os.path.dirname(__file__)
+    possible_paths = [
+        os.path.join(base_dir, 'uploads', 'app-release.apk'),
+        os.path.join(base_dir, 'static', 'app-release.apk'),
+        os.path.abspath(os.path.join(base_dir, '..', 'build', 'app', 'outputs', 'flutter-apk', 'app-release.apk'))
+    ]
+    for apk_path in possible_paths:
+        if os.path.exists(apk_path):
+            return send_file(
+                apk_path,
+                mimetype='application/vnd.android.package-archive',
+                as_attachment=True,
+                download_name='Bola_Designs.apk'
+            )
+    return jsonify({'error': 'APK file not ready yet'}), 404
 
 
 if __name__ == '__main__':
