@@ -146,7 +146,7 @@
             <span>امسحي الكود بكاميرا الموبايل للتحميل المباشر</span>
         </div>
 
-        <a href="/app-release.apk" download="Bola_Designs.apk" class="download-btn">
+        <a id="downloadBtn" href="https://bola-designs-backend.onrender.com/download/app-release.apk" download="Bola_Designs.apk" class="download-btn">
             <i class="fa-solid fa-download"></i>
             <span>تحميل التطبيق</span>
         </a>
@@ -157,7 +157,7 @@
     </div>
 
     <script>
-        const apkUrl = window.location.origin + '/app-release.apk';
+        const apkUrl = 'https://bola-designs-backend.onrender.com/download/app-release.apk';
         const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(apkUrl)}&color=654ee1`;
         document.getElementById('qrCode').src = qrApi;
     </script>
