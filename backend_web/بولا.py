@@ -48,18 +48,15 @@ def add_cors_headers(response):
     response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
     return response
 
-# قاعدة البيانات: القراءة من DATABASE_URL أولاً (سواء Supabase Postgres أو غيره) مع fallback لـ SQLite المحلي
-DATABASE_URL = os.environ.get('DATABASE_URL')
-if DATABASE_URL:
-    if DATABASE_URL.startswith("postgres://"):
-        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
-else:
-    db_path = os.path.join(os.path.dirname(__file__), 'tasks.db')
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+# قاعدة البيانات: القراءة من DATABASE_URL أولاً مع Supabase Postgres كـ default لبيئة Vercel/Cloud
+DEFAULT_DB_URL = "postgresql://postgres.kxeqayzxfvoedqvilcmp:boladesign012B@aws-0-eu-west-1.pooler.supabase.com:6543/postgres"
+DATABASE_URL = os.environ.get('DATABASE_URL') or DEFAULT_DB_URL
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or "bola_secret_key_2026"
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 app.config['STATIC_VERSION'] = str(int(time.time()))
 # reduce static file caching during development
@@ -69,13 +66,23 @@ db = SQLAlchemy(app)
 # expose STATIC_VERSION to templates
 app.jinja_env.globals['STATIC_VERSION'] = app.config['STATIC_VERSION']
 
-# uploads configuration
-app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'uploads')
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-app.config['PRODUCT_IMAGE_FOLDER'] = os.path.join(app.static_folder, 'product_images')
-os.makedirs(app.config['PRODUCT_IMAGE_FOLDER'], exist_ok=True)
-app.config['PAYMENT_PROOF_FOLDER'] = os.path.join(app.static_folder, 'payment_proofs')
-os.makedirs(app.config['PAYMENT_PROOF_FOLDER'], exist_ok=True)
+# uploads configuration (safe for Vercel read-only filesystem)
+is_vercel = os.environ.get('VERCEL') == '1' or 'VERCEL_REGION' in os.environ
+if is_vercel:
+    app.config['UPLOAD_FOLDER'] = '/tmp/uploads'
+    app.config['PRODUCT_IMAGE_FOLDER'] = '/tmp/product_images'
+    app.config['PAYMENT_PROOF_FOLDER'] = '/tmp/payment_proofs'
+else:
+    app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'uploads')
+    app.config['PRODUCT_IMAGE_FOLDER'] = os.path.join(app.static_folder, 'product_images')
+    app.config['PAYMENT_PROOF_FOLDER'] = os.path.join(app.static_folder, 'payment_proofs')
+
+for folder in [app.config['UPLOAD_FOLDER'], app.config['PRODUCT_IMAGE_FOLDER'], app.config['PAYMENT_PROOF_FOLDER']]:
+    try:
+        os.makedirs(folder, exist_ok=True)
+    except Exception:
+        pass
+
 
 
 # ===================== المودلات =====================
