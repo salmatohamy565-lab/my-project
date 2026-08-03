@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تحميل تطبيق Bola Designs - بولا ديزاينز</title>
+    
+    <!-- Google Fonts & Font Awesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Cairo', sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            min-height: 100vh;
+            background-color: #f2f7f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .phone-card {
+            background: #ffffff;
+            border-radius: 36px;
+            padding: 30px 24px;
+            max-width: 440px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .logo-box {
+            width: 90px;
+            height: 90px;
+            background: linear-gradient(135deg, #7048e8 0%, #5c7cfa 100%);
+            border-radius: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: 40px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 25px rgba(112, 72, 232, 0.3);
+        }
+
+        .app-name {
+            font-size: 24px;
+            font-weight: 800;
+            color: #1e1e24;
+            margin-bottom: 6px;
+        }
+
+        .app-desc {
+            font-size: 14px;
+            color: #6c757d;
+            font-weight: 600;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .qr-wrapper {
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 20px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .qr-wrapper img {
+            width: 180px;
+            height: 180px;
+            display: block;
+            border-radius: 12px;
+        }
+
+        .qr-label {
+            font-size: 13px;
+            color: #495057;
+            font-weight: 700;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .download-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 18px;
+            background: #654ee1;
+            color: #ffffff;
+            text-decoration: none;
+            font-size: 19px;
+            font-weight: 800;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(101, 78, 225, 0.35);
+            transition: all 0.25s ease;
+        }
+
+        .download-btn:hover {
+            background: #523bbd;
+            transform: translateY(-2px);
+            box-shadow: 0 14px 30px rgba(101, 78, 225, 0.45);
+        }
+
+        .file-info {
+            margin-top: 18px;
+            font-size: 12px;
+            color: #868e96;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="phone-card">
+        <div class="logo-box">
+            <i class="fa-solid fa-mobile-screen-button"></i>
+        </div>
+
+        <h1 class="app-name">Bola Designs - بولا ديزاينز</h1>
+        <p class="app-desc">التطبيق الرسمي لتصفح وإدارة التصاميم والطلبات</p>
+
+        <div class="qr-wrapper">
+            <img id="qrCode" src="" alt="QR Code للتحميل">
+        </div>
+
+        <div class="qr-label">
+            <i class="fa-solid fa-qrcode"></i>
+            <span>امسحي الكود بكاميرا الموبايل للتحميل المباشر</span>
+        </div>
+
+        <a href="/app-release.apk" download="Bola_Designs.apk" class="download-btn">
+            <i class="fa-solid fa-download"></i>
+            <span>تحميل التطبيق</span>
+        </a>
+
+        <div class="file-info">
+            نسخة الأندرويد الرسمية APK (56 MB) • v1.0.0
+        </div>
+    </div>
+
+    <script>
+        const apkUrl = window.location.origin + '/app-release.apk';
+        const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(apkUrl)}&color=654ee1`;
+        document.getElementById('qrCode').src = qrApi;
+    </script>
+</body>
+</html>
