@@ -87,8 +87,7 @@ class ApiService {
     String? storedUrl = prefs.getString('api_base_url');
     if (storedUrl != null &&
         storedUrl.isNotEmpty &&
-        storedUrl.startsWith('http') &&
-        !storedUrl.contains('192.168.')) {
+        storedUrl.startsWith('https://')) {
       _baseUrl = storedUrl;
     } else {
       _baseUrl = _defaultProdUrl;
