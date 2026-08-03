@@ -84,13 +84,14 @@ class ApiService {
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    _baseUrl = kIsWeb ? 'http://localhost:5001' : 'http://192.168.1.18:5001';
     String? storedUrl = prefs.getString('api_base_url');
     if (storedUrl != null &&
         storedUrl.isNotEmpty &&
-        storedUrl.startsWith('http')) {
+        storedUrl.startsWith('http') &&
+        !storedUrl.contains('192.168.')) {
       _baseUrl = storedUrl;
     } else {
+      _baseUrl = _defaultProdUrl;
       await prefs.setString('api_base_url', _baseUrl);
     }
     _cookie = prefs.getString('session_cookie');
