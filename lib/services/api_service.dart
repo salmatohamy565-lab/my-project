@@ -24,8 +24,8 @@ class ApiService {
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
   ApiService._internal() {
-    _dio.options.connectTimeout = const Duration(seconds: 8);
-    _dio.options.receiveTimeout = const Duration(seconds: 8);
+    _dio.options.connectTimeout = const Duration(seconds: 60);
+    _dio.options.receiveTimeout = const Duration(seconds: 60);
 
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
@@ -49,39 +49,6 @@ class ApiService {
         return handler.next(response);
       },
       onError: (DioException err, handler) async {
-        if (err.type == DioExceptionType.connectionTimeout ||
-            err.type == DioExceptionType.sendTimeout ||
-            err.type == DioExceptionType.receiveTimeout ||
-            err.type == DioExceptionType.connectionError ||
-            err.error is SocketException) {
-          
-          final candidateUrls = [
-            'http://127.0.0.1:5001',
-            'http://localhost:5001',
-            'http://10.0.2.2:5001',
-            'http://192.168.1.18:5001',
-            'https://bola-designs-backend.onrender.com',
-          ];
-
-          for (final candidate in candidateUrls) {
-            if (candidate == _baseUrl) continue;
-            try {
-              final testDio = Dio(BaseOptions(
-                connectTimeout: const Duration(seconds: 3),
-                receiveTimeout: const Duration(seconds: 3),
-              ));
-              final pingRes = await testDio.get('$candidate/health');
-              if (pingRes.statusCode == 200) {
-                await setBaseUrl(candidate);
-                
-                final RequestOptions opts = err.requestOptions;
-                opts.baseUrl = '$_baseUrl/api';
-                final clonedReq = await _dio.fetch(opts);
-                return handler.resolve(clonedReq);
-              }
-            } catch (_) {}
-          }
-        }
         return handler.next(err);
       },
     ));
@@ -90,7 +57,13 @@ class ApiService {
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     String? storedUrl = prefs.getString('api_base_url');
-    if (storedUrl != null && storedUrl.isNotEmpty) {
+    if (storedUrl != null &&
+        storedUrl.isNotEmpty &&
+        !storedUrl.contains('127.0.0.1') &&
+        !storedUrl.contains('localhost') &&
+        !storedUrl.contains('10.0.2.2') &&
+        !storedUrl.contains('192.168') &&
+        !storedUrl.contains('5001')) {
       _baseUrl = storedUrl;
     } else {
       _baseUrl = defaultBaseUrl;
@@ -127,55 +100,15 @@ class ApiService {
   Future<void> _ensureWorkingBaseUrl() async {
     try {
       final pingDio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 3),
-        receiveTimeout: const Duration(seconds: 3),
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
       ));
       final res = await pingDio.get('$_baseUrl/health');
       if (res.statusCode == 200) return;
     } catch (_) {
-      try {
-        final pingDio = Dio(BaseOptions(
-          connectTimeout: const Duration(seconds: 3),
-          receiveTimeout: const Duration(seconds: 3),
-        ));
-        final res = await pingDio.get('$_baseUrl/api/public/products');
-        if (res.statusCode == 200) return;
-      } catch (_) {}
-    }
-
-    final candidates = [
-      'http://127.0.0.1:5001',
-      'http://localhost:5001',
-      'http://10.0.2.2:5001',
-      'http://192.168.1.18:5001',
-      'https://bola-designs-backend.onrender.com',
-    ];
-
-    for (final candidate in candidates) {
-      if (candidate == _baseUrl) continue;
-      try {
-        final pingDio = Dio(BaseOptions(
-          connectTimeout: const Duration(seconds: 3),
-          receiveTimeout: const Duration(seconds: 3),
-        ));
-        final res = await pingDio.get('$candidate/health');
-        if (res.statusCode == 200) {
-          await setBaseUrl(candidate);
-          return;
-        }
-      } catch (_) {
-        try {
-          final pingDio = Dio(BaseOptions(
-            connectTimeout: const Duration(seconds: 3),
-            receiveTimeout: const Duration(seconds: 3),
-          ));
-          final res = await pingDio.get('$candidate/api/public/products');
-          if (res.statusCode == 200) {
-            await setBaseUrl(candidate);
-            return;
-          }
-        } catch (_) {}
-      }
+      _baseUrl = defaultBaseUrl;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('api_base_url', _baseUrl);
     }
   }
 
