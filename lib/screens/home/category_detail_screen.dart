@@ -11,6 +11,7 @@ import '../../widgets/app_logo_bar.dart';
 import '../../widgets/custom_bottom_nav_bar.dart';
 import '../../widgets/radial_background.dart';
 import '../../widgets/payment_methods_modal.dart';
+import '../../providers/auth_provider.dart';
 
 class CategoryDetailScreen extends StatefulWidget {
   final CategoryModel category;
@@ -56,6 +57,10 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+    final currentUser = authProvider.currentUser;
+    final isCustomer = currentUser == null || currentUser.isCustomer;
+
     final productProvider = context.watch<ProductProvider>();
     final allProducts = productProvider.products;
     final filtered = _getFilteredProducts(allProducts);
@@ -259,31 +264,32 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                                                 fontSize: 14.sp,
                                               ),
                                             ),
-                                            InkWell(
-                                              onTap: () {
-                                                PaymentMethodsModal.show(
-                                                  context,
-                                                  productName: product.name,
-                                                  productPrice: product.price,
-                                                  onConfirmOrder: (methodTitle, senderInfo, [proofFile]) {
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      SnackBar(
-                                                        content: Text('✓ تم طلب "${product.name}" بنجاح!'),
-                                                        backgroundColor: AppColors.successStart,
-                                                      ),
-                                                    );
-                                                  },
-                                                );
-                                              },
-                                              child: Container(
-                                                padding: EdgeInsets.all(6.r),
-                                                decoration: BoxDecoration(
-                                                  color: AppColors.primaryAccent,
-                                                  borderRadius: BorderRadius.circular(10.r),
+                                            if (isCustomer)
+                                              InkWell(
+                                                onTap: () {
+                                                  PaymentMethodsModal.show(
+                                                    context,
+                                                    productName: product.name,
+                                                    productPrice: product.price,
+                                                    onConfirmOrder: (methodTitle, senderInfo, [proofFile]) {
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        SnackBar(
+                                                          content: Text('✓ تم طلب "${product.name}" بنجاح!'),
+                                                          backgroundColor: AppColors.successStart,
+                                                        ),
+                                                      );
+                                                    },
+                                                  );
+                                                },
+                                                child: Container(
+                                                  padding: EdgeInsets.all(6.r),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.primaryAccent,
+                                                    borderRadius: BorderRadius.circular(10.r),
+                                                  ),
+                                                  child: Icon(Icons.add_shopping_cart, color: Colors.white, size: 16.r),
                                                 ),
-                                                child: Icon(Icons.add_shopping_cart, color: Colors.white, size: 16.r),
                                               ),
-                                            ),
                                           ],
                                         ),
                                       ],
@@ -311,7 +317,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     }
     if (imagePath.startsWith('assets/')) {
       final filename = imagePath.split('/').last;
-      final serverUrl = 'http://127.0.0.1:5001/static/product_images/$filename';
+      final serverUrl = '${ApiService().baseUrl}/static/product_images/$filename';
       return Image.network(
         serverUrl,
         fit: fit,

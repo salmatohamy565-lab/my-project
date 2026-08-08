@@ -180,6 +180,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     final currentUser = authProvider.currentUser;
     final products = productProvider.products;
     final isAdmin = currentUser?.isAdmin ?? false;
+    final isCustomer = currentUser == null || currentUser.isCustomer;
 
     return Scaffold(
       key: _scaffoldKey,
@@ -210,7 +211,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       if (_selectedCategory == null)
                         _buildCategoryGrid(products, isAdmin)
                       else
-                        _buildCategoryDetailPage(products, authProvider.baseUrl, isAdmin, productProvider),
+                        _buildCategoryDetailPage(products, authProvider.baseUrl, isAdmin, isCustomer, productProvider),
                     ],
                   ),
                 ),
@@ -500,7 +501,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     );
   }
 
-  Widget _buildCategoryDetailPage(List<ProductModel> products, String baseUrl, bool isAdmin, ProductProvider productProvider) {
+  Widget _buildCategoryDetailPage(List<ProductModel> products, String baseUrl, bool isAdmin, bool isCustomer, ProductProvider productProvider) {
     final catId = _selectedCategory!.id;
     final catProducts = products.where((p) => p.categoryId == catId || (catId == 'wedding' && (p.categoryId == null || p.categoryId == ''))).toList();
 
@@ -646,7 +647,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              if (!isAdmin)
+                              if (isCustomer)
                                 ElevatedButton.icon(
                                   onPressed: () {
                                     PaymentMethodsModal.show(

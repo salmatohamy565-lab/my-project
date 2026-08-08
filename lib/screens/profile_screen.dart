@@ -238,12 +238,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       child: Column(
                         children: [
-                          _buildListTile(
-                            icon: Icons.account_balance_wallet,
-                            title: 'طرق الدفع والتحويل (كاش / انستاباي)',
-                            onTap: () => PaymentMethodsModal.show(context),
-                          ),
-                          const Divider(color: AppColors.borderLight, height: 1),
+                          if (isCustomer) ...[
+                            _buildListTile(
+                              icon: Icons.account_balance_wallet,
+                              title: 'طرق الدفع والتحويل (كاش / انستاباي)',
+                              onTap: () => PaymentMethodsModal.show(context),
+                            ),
+                            const Divider(color: AppColors.borderLight, height: 1),
+                          ],
                           if (isAdmin) ...[
                             _buildListTile(
                               icon: Icons.archive_outlined,

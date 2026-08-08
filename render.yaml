@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: bola-designs-backend
+    env: python
+    region: frankfurt
+    rootDir: backend_web
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql://postgres.kxeqayzxfvoedqvilcmp:boladesign012B@aws-0-eu-west-1.pooler.supabase.com:6543/postgres
+      - key: SUPABASE_URL
+        value: https://kxeqayzxfvoedqvilcmp.supabase.co
+      - key: SECRET_KEY
+        value: super-secret-bola-designs-key-2026
+      - key: SMTP_EMAIL
+        value: boladesigns111@gmail.com
+      - key: SMTP_PASSWORD
+        value: scbo gjrv pxil fhup

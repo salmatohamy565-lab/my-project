@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_styles.dart';
@@ -36,7 +37,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
   File? _selectedFile;
   Uint8List? _selectedFileBytes;
   String? _selectedFileName;
-  UserModel? _selectedRecipient;
+  int? _selectedRecipientId;
   Timer? _refreshTimer;
   bool _isDownloading = false;
   String? _downloadingFilename;
@@ -102,7 +103,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
     }
 
     final userProvider = context.read<UserProvider>();
-    final recipientId = _selectedRecipient?.id;
+    final recipientId = _selectedRecipientId;
 
     final success = await userProvider.uploadUserFile(
       currentUser.id,
@@ -117,7 +118,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
         _selectedFile = null;
         _selectedFileBytes = null;
         _selectedFileName = null;
-        _selectedRecipient = null;
+        _selectedRecipientId = null;
       });
       _showSnackbar(
         recipientId != null ? '✓ تم إرسال الملف للزميل بنجاح' : '✓ تم مشاركة الملف مع جميع الموظفين بنجاح',
@@ -159,13 +160,22 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
     });
 
     try {
+      final apiService = ApiService();
+      final fullUrl = fileUrl.startsWith('http') ? fileUrl : '${apiService.baseUrl}$fileUrl';
+
+      if (kIsWeb) {
+        final uri = Uri.parse(fullUrl);
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        setState(() {
+          _isDownloading = false;
+          _downloadingFilename = null;
+        });
+        return;
+      }
+
       final tempDir = await getTemporaryDirectory();
       final savePath = '${tempDir.path}/$filename';
-      
-      final apiService = ApiService();
       final dio = Dio();
-      
-      final fullUrl = fileUrl.startsWith('http') ? fileUrl : '${apiService.baseUrl}$fileUrl';
 
       await dio.download(
         fullUrl,
@@ -659,30 +669,46 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
                   Container(
                     padding: EdgeInsets.symmetric(horizontal: 12.w),
                     decoration: BoxDecoration(
-                      color: AppColors.inputBg,
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(12.r),
-                      border: Border.all(color: AppColors.borderDark),
+                      border: Border.all(color: AppColors.borderDark, width: 1.2),
                     ),
                     child: DropdownButtonHideUnderline(
-                      child: DropdownButton<UserModel?>(
-                        value: _selectedRecipient,
-                        isExpanded: true,
-                        dropdownColor: AppColors.loginCardBg,
-                        hint: const Text('الجميع (مشاركة عامة مع كافة الموظفين)', style: TextStyle(color: AppColors.textMuted)),
-                        items: [
-                          const DropdownMenuItem<UserModel?>(
-                            value: null,
-                            child: Text('الجميع (مشاركة عامة مع كافة الموظفين)', style: TextStyle(color: Colors.white)),
-                          ),
-                          ...colleagues.map((user) => DropdownMenuItem<UserModel?>(
-                                value: user,
-                                child: Text('👤 ${user.username}', style: const TextStyle(color: Colors.white)),
-                              )),
-                        ],
-                        onChanged: (val) {
-                          setState(() {
-                            _selectedRecipient = val;
-                          });
+                      child: Builder(
+                        builder: (context) {
+                          final validRecipientId = colleagues.any((u) => u.id == _selectedRecipientId) ? _selectedRecipientId : null;
+
+                          return DropdownButton<int?>(
+                            value: validRecipientId,
+                            isExpanded: true,
+                            dropdownColor: Colors.white,
+                            style: TextStyle(color: Colors.black87, fontSize: 13.sp, fontWeight: FontWeight.bold),
+                            hint: Text(
+                              'الجميع (مشاركة عامة مع كافة الموظفين)',
+                              style: TextStyle(color: Colors.black87, fontSize: 12.sp, fontWeight: FontWeight.w600),
+                            ),
+                            items: [
+                              DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text(
+                                  'الجميع (مشاركة عامة مع كافة الموظفين)',
+                                  style: TextStyle(color: Colors.black87, fontSize: 13.sp, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              ...colleagues.map((user) => DropdownMenuItem<int?>(
+                                    value: user.id,
+                                    child: Text(
+                                      '👤 ${user.displayName} (@${user.username})',
+                                      style: TextStyle(color: Colors.black87, fontSize: 13.sp, fontWeight: FontWeight.w600),
+                                    ),
+                                  )),
+                            ],
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedRecipientId = val;
+                              });
+                            },
+                          );
                         },
                       ),
                     ),
@@ -723,7 +749,9 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
                     onPressed: _sendFileToColleague,
                     icon: const Icon(Icons.cloud_upload_outlined, color: Colors.white, size: 18),
                     label: Text(
-                      _selectedRecipient != null ? 'إرسال إلى ${_selectedRecipient!.username}' : 'مشاركة مع جميع الموظفين',
+                      _selectedRecipientId != null && colleagues.any((u) => u.id == _selectedRecipientId)
+                          ? 'إرسال إلى ${colleagues.firstWhere((u) => u.id == _selectedRecipientId).username}'
+                          : 'مشاركة مع جميع الموظفين',
                       style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.sp),
                     ),
                     style: ElevatedButton.styleFrom(

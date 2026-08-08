@@ -2,8 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_styles.dart';
@@ -42,14 +44,25 @@ class _ArchivedFilesScreenState extends State<ArchivedFilesScreen> {
     });
 
     try {
+      final apiService = ApiService();
+      final fullUrl = fileUrl.startsWith('http') ? fileUrl : '${apiService.baseUrl}$fileUrl';
+
+      if (kIsWeb) {
+        final uri = Uri.parse(fullUrl);
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        setState(() {
+          _isDownloading = false;
+          _downloadingFilename = null;
+        });
+        return;
+      }
+
       final tempDir = await getTemporaryDirectory();
       final savePath = '${tempDir.path}/$filename';
-      
-      final apiService = ApiService();
       final dio = Dio();
       
       await dio.download(
-        '${apiService.baseUrl}$fileUrl',
+        fullUrl,
         savePath,
         options: Options(
           headers: apiService.cookie != null ? {'Cookie': apiService.cookie} : null,

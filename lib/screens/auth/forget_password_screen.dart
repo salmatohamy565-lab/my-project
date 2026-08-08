@@ -32,6 +32,7 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
 
   void _handleSendCode() async {
     final email = _emailController.text.trim();
+    print('[FORGET PASSWORD UI BUTTON] User clicked Send Code with email: $email');
     if (email.isEmpty || !email.contains('@')) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('يرجى إدخال بريد إلكتروني صحيح')),
@@ -42,16 +43,30 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
     final authProvider = context.read<AuthProvider>();
     final code = await authProvider.forgetPassword(email);
 
-    if (code != null && mounted) {
+    if (mounted && code != null) {
       setState(() {
         _codeSent = true;
-        if (code != 'OK') _demoCode = code;
+        if (code != 'OK') {
+          _demoCode = code;
+          _codeController.text = code;
+        }
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('تم إرسال كود الاستعادة! (الكود للتجربة: ${_demoCode ?? 'تفقد البريد'})'),
+          content: Text(code != 'OK'
+              ? '✓ تم إرسال كود الاستعادة لبريدك! (كود التعيين للاختبار: $code)'
+              : '✓ تم إرسال كود الاستعادة بنجاح إلى بريدك الإلكتروني! يرجى فحص البريد (Inbox / Spam).'),
           backgroundColor: AppColors.emeraldGreen,
           duration: const Duration(seconds: 6),
+        ),
+      );
+    } else if (mounted) {
+      final error = authProvider.errorMessage ?? 'فشل إرسال كود الاستعادة. يرجى التحقق من الاتصال بالسيرفر والبريد الإلكتروني.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✕ $error'),
+          backgroundColor: Colors.redAccent,
+          duration: const Duration(seconds: 5),
         ),
       );
     }
@@ -169,21 +184,6 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
                                 : Text('إرسال كود التعيين', style: AppStyles.buttonText.copyWith(color: Colors.white)),
                           ),
                         ] else ...[
-                          if (_demoCode != null) ...[
-                            Container(
-                              padding: EdgeInsets.all(10.w),
-                              margin: EdgeInsets.only(bottom: 14.h),
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryAccent.withOpacity(0.08),
-                                borderRadius: BorderRadius.circular(10.r),
-                              ),
-                              child: Text(
-                                '💡 كود الاستعادة للتجربة المباشرة: $_demoCode',
-                                style: AppStyles.labelBold.copyWith(color: AppColors.primaryAccent),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ],
                           TextFormField(
                             controller: _codeController,
                             keyboardType: TextInputType.number,

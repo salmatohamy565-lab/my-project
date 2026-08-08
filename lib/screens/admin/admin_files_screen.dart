@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_styles.dart';
@@ -114,15 +115,25 @@ class _AdminFilesScreenState extends State<AdminFilesScreen> {
     });
 
     try {
+      final apiService = ApiService();
+      final fullUrl = fileUrl.startsWith('http') ? fileUrl : '${apiService.baseUrl}$fileUrl';
+
+      if (kIsWeb) {
+        final uri = Uri.parse(fullUrl);
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        setState(() {
+          _isDownloading = false;
+          _downloadingFilename = null;
+        });
+        return;
+      }
+
       final tempDir = await getTemporaryDirectory();
       final savePath = '${tempDir.path}/$filename';
-      
-      final apiService = ApiService();
       final dio = Dio();
       
-      // Download the file passing cookies for auth
       await dio.download(
-        '${apiService.baseUrl}$fileUrl',
+        fullUrl,
         savePath,
         options: Options(
           headers: apiService.cookie != null ? {'Cookie': apiService.cookie} : null,
@@ -134,7 +145,6 @@ class _AdminFilesScreenState extends State<AdminFilesScreen> {
         _downloadingFilename = null;
       });
 
-      // Open the downloaded file using open_filex
       final result = await OpenFilex.open(savePath);
       if (result.type != ResultType.done) {
         _showSnackbar('لا يمكن فتح هذا النوع من الملفات: ${result.message}', Colors.amber);
@@ -233,16 +243,16 @@ class _AdminFilesScreenState extends State<AdminFilesScreen> {
                             Text('الموظف', style: AppStyles.labelBold),
                             SizedBox(height: 8.h),
                             DropdownButtonFormField<int>(
-                              dropdownColor: AppColors.loginCardBg,
+                              dropdownColor: Colors.white,
                               value: _selectedUserId,
-                              style: const TextStyle(color: AppColors.textMain),
+                              style: TextStyle(color: Colors.black87, fontSize: 13.sp, fontWeight: FontWeight.bold),
                               decoration: const InputDecoration(
                                 hintText: '-- اختر موظف --',
                               ),
                               items: supervisorsOnly.map((u) {
                                 return DropdownMenuItem<int>(
                                   value: u.id,
-                                  child: Text(u.username),
+                                  child: Text('👤 ${u.displayName} (@${u.username})', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
                                 );
                               }).toList(),
                               onChanged: (val) {

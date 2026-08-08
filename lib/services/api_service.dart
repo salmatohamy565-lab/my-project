@@ -8,8 +8,12 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class ApiService {
   final Dio _dio = Dio();
   final _secureStorage = const FlutterSecureStorage();
+  static String get defaultBaseUrl {
+    return 'https://bola-designs-backend.onrender.com';
+  }
+
   static const String _defaultProdUrl = 'https://bola-designs-backend.onrender.com';
-  String _baseUrl = kReleaseMode ? _defaultProdUrl : _defaultProdUrl;
+  String _baseUrl = defaultBaseUrl;
   String? _cookie;
   String? _token;
 
@@ -52,10 +56,10 @@ class ApiService {
             err.error is SocketException) {
           
           final candidateUrls = [
-            'https://bola-designs-backend.onrender.com',
-            'http://192.168.1.18:5001',
             'http://10.0.2.2:5001',
             'http://localhost:5001',
+            'http://192.168.1.18:5001',
+            'https://bola-designs-backend.onrender.com',
           ];
 
           for (final candidate in candidateUrls) {
@@ -85,16 +89,15 @@ class ApiService {
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     String? storedUrl = prefs.getString('api_base_url');
-    if (storedUrl != null &&
-        storedUrl.isNotEmpty &&
-        storedUrl.startsWith('https://')) {
+    if (storedUrl != null && storedUrl.isNotEmpty) {
       _baseUrl = storedUrl;
     } else {
-      _baseUrl = _defaultProdUrl;
+      _baseUrl = defaultBaseUrl;
       await prefs.setString('api_base_url', _baseUrl);
     }
     _cookie = prefs.getString('session_cookie');
     _token = await _secureStorage.read(key: 'jwt_token');
+    print('[API SERVICE INIT] Base URL resolved to: $_baseUrl');
   }
 
   Future<void> saveToken(String jwtToken) async {
@@ -131,10 +134,11 @@ class ApiService {
     } catch (_) {}
 
     final candidates = [
+      'http://10.0.2.2:5001',
       'http://127.0.0.1:5001',
       'http://localhost:5001',
       'http://192.168.1.18:5001',
-      'http://10.0.2.2:5001',
+      'https://bola-designs-backend.onrender.com',
     ];
 
     for (final candidate in candidates) {
@@ -238,13 +242,22 @@ class ApiService {
   }
 
   Future<Response> forgetPassword(String email) async {
+    await _ensureWorkingBaseUrl();
+    final targetEndpoint = '$_baseUrl/api/auth/forget-password';
+    print('[UI API REQUEST] Base URL resolved to: $_baseUrl');
+    print('[UI API REQUEST] Sending Forgot Password request to: $targetEndpoint for email: $email');
     try {
       final response = await _dio.post('/auth/forget-password', data: {
         'email': email,
       });
+      print('[UI API RESPONSE SUCCESS] Status: ${response.statusCode}, Data: ${response.data}');
       return response;
     } on DioException catch (e) {
+      print('[UI API RESPONSE ERROR] Status Code: ${e.response?.statusCode}, Message: ${e.message}, Data: ${e.response?.data}, ErrorType: ${e.type}');
       throw _handleError(e);
+    } catch (e) {
+      print('[UI API UNEXPECTED ERROR] $e');
+      rethrow;
     }
   }
 
