@@ -2001,30 +2001,5 @@ def privacy_policy():
     return render_template('privacy_policy.html')
 
 
-@app.route('/download')
-def download_page():
-    return render_template('app_download.html')
-
-
-@app.route('/download/app-release.apk')
-def serve_apk():
-    from flask import send_file
-    base_dir = os.path.dirname(__file__)
-    possible_paths = [
-        os.path.join(base_dir, 'uploads', 'app-release.apk'),
-        os.path.join(base_dir, 'static', 'app-release.apk'),
-        os.path.abspath(os.path.join(base_dir, '..', 'build', 'app', 'outputs', 'flutter-apk', 'app-release.apk'))
-    ]
-    for apk_path in possible_paths:
-        if os.path.exists(apk_path):
-            return send_file(
-                apk_path,
-                mimetype='application/vnd.android.package-archive',
-                as_attachment=True,
-                download_name='Bola_Designs.apk'
-            )
-    return jsonify({'error': 'APK file not ready yet'}), 404
-
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=False, use_reloader=False)
