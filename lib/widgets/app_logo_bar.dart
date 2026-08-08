@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_styles.dart';
+import '../providers/auth_provider.dart';
 import 'notifications_modal.dart';
 
 /// Unified top bar used across all app screens.
@@ -19,6 +21,10 @@ class AppLogoBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+    final currentUser = authProvider.currentUser;
+    final photoUrl = currentUser?.photoUrl;
+
     return Container(
       padding: EdgeInsets.fromLTRB(12.w, 0, 12.w, 0),
       height: 56.h,
@@ -75,11 +81,16 @@ class AppLogoBar extends StatelessWidget {
                   CircleAvatar(
                     radius: 16.r,
                     backgroundColor: AppColors.primaryAccent.withOpacity(0.08),
-                    child: const Icon(
-                      Icons.person,
-                      color: AppColors.primaryAccent,
-                      size: 20,
-                    ),
+                    backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+                        ? NetworkImage(photoUrl.startsWith('http') ? photoUrl : '${authProvider.baseUrl}$photoUrl') as ImageProvider
+                        : null,
+                    child: (photoUrl == null || photoUrl.isEmpty)
+                        ? const Icon(
+                            Icons.person,
+                            color: AppColors.primaryAccent,
+                            size: 20,
+                          )
+                        : null,
                   ),
                 ],
               ),

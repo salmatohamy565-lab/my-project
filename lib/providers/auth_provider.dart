@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -231,13 +232,25 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> updateProfile({String? name, String? phone, File? photo}) async {
+  Future<bool> updateProfile({
+    String? name,
+    String? phone,
+    File? photo,
+    Uint8List? photoBytes,
+    String? photoName,
+  }) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final response = await _apiService.updateProfile(name: name, phone: phone, photo: photo);
+      final response = await _apiService.updateProfile(
+        name: name,
+        phone: phone,
+        photo: photo,
+        photoBytes: photoBytes,
+        photoName: photoName,
+      );
       if (response.statusCode == 200 && response.data != null) {
         final userData = response.data['user'];
         if (userData != null) {

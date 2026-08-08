@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import '../utils/web_file_picker.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_styles.dart';
 import '../providers/auth_provider.dart';
@@ -144,6 +146,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             statusColor = AppColors.dangerStart;
                           }
 
+                          final itemsSummary = (item['items_summary'] ?? '').toString();
+                          final rejectionReason = (item['rejection_reason'] ?? '').toString();
+
                           return Container(
                             padding: EdgeInsets.all(14.r),
                             decoration: BoxDecoration(
@@ -151,44 +156,76 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               borderRadius: BorderRadius.circular(14.r),
                               border: Border.all(color: AppColors.borderLight),
                             ),
-                            child: Row(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                CircleAvatar(
-                                  radius: 20.r,
-                                  backgroundColor: statusColor.withOpacity(0.15),
-                                  child: Icon(Icons.receipt_long, color: statusColor, size: 20.r),
-                                ),
-                                SizedBox(width: 12.w),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('طلب رقم #$id', style: AppStyles.labelBold),
-                                      if (date.isNotEmpty) ...[
-                                        SizedBox(height: 2.h),
-                                        Text(date, style: AppStyles.bodyMuted.copyWith(fontSize: 11.sp)),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                Row(
                                   children: [
-                                    Container(
-                                      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-                                      decoration: BoxDecoration(
-                                        color: statusColor.withOpacity(0.15),
-                                        borderRadius: BorderRadius.circular(8.r),
-                                      ),
-                                      child: Text(
-                                        statusLabel,
-                                        style: TextStyle(color: statusColor, fontSize: 11.sp, fontWeight: FontWeight.bold),
+                                    CircleAvatar(
+                                      radius: 20.r,
+                                      backgroundColor: statusColor.withOpacity(0.15),
+                                      child: Icon(Icons.receipt_long, color: statusColor, size: 20.r),
+                                    ),
+                                    SizedBox(width: 12.w),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('طلب رقم #$id', style: AppStyles.labelBold),
+                                          if (date.isNotEmpty) ...[
+                                            SizedBox(height: 2.h),
+                                            Text(date, style: AppStyles.bodyMuted.copyWith(fontSize: 11.sp)),
+                                          ],
+                                        ],
                                       ),
                                     ),
-                                    SizedBox(height: 4.h),
-                                    Text('$total ج.م', style: AppStyles.labelBold.copyWith(color: AppColors.primaryAccent)),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Container(
+                                          padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+                                          decoration: BoxDecoration(
+                                            color: statusColor.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(8.r),
+                                          ),
+                                          child: Text(
+                                            statusLabel,
+                                            style: TextStyle(color: statusColor, fontSize: 11.sp, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                        SizedBox(height: 4.h),
+                                        Text('$total ج.م', style: AppStyles.labelBold.copyWith(color: AppColors.primaryAccent)),
+                                      ],
+                                    ),
                                   ],
                                 ),
+                                if (itemsSummary.isNotEmpty) ...[
+                                  SizedBox(height: 8.h),
+                                  Text('المنتجات: $itemsSummary', style: AppStyles.bodyDefault.copyWith(fontSize: 12.sp)),
+                                ],
+                                if (status == 'rejected' && rejectionReason.isNotEmpty) ...[
+                                  SizedBox(height: 8.h),
+                                  Container(
+                                    padding: EdgeInsets.all(8.r),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.dangerStart.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8.r),
+                                      border: Border.all(color: AppColors.dangerStart.withOpacity(0.3)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.info_outline, color: AppColors.dangerStart, size: 16),
+                                        SizedBox(width: 6.w),
+                                        Expanded(
+                                          child: Text(
+                                            'سبب الرفض: $rejectionReason',
+                                            style: TextStyle(color: AppColors.dangerStart, fontSize: 11.sp, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           );
@@ -255,6 +292,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final phoneCtrl = TextEditingController(text: initialPhone);
     final emailCtrl = TextEditingController(text: user?.email ?? '');
     File? selectedPhoto;
+    Uint8List? selectedPhotoBytes;
+    String? selectedPhotoName;
 
     showModalBottomSheet(
       context: context,
@@ -289,22 +328,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Center(
                       child: GestureDetector(
                         onTap: () async {
-                          final result = await FilePicker.platform.pickFiles(type: FileType.image);
-                          if (result != null && result.files.single.path != null) {
+                          final picked = await pickImageFile();
+                          if (picked != null) {
                             setModalState(() {
-                              selectedPhoto = File(result.files.single.path!);
+                              selectedPhotoBytes = picked.bytes;
+                              selectedPhotoName = picked.name;
+                              selectedPhoto = picked.file;
                             });
                           }
                         },
                         child: CircleAvatar(
                           radius: 40.r,
                           backgroundColor: AppColors.primaryAccent.withOpacity(0.1),
-                          backgroundImage: selectedPhoto != null
-                              ? FileImage(selectedPhoto!) as ImageProvider
-                              : (user?.photoUrl != null
-                                  ? NetworkImage('${authProvider.baseUrl}${user!.photoUrl}') as ImageProvider
-                                  : null),
-                          child: (selectedPhoto == null && user?.photoUrl == null)
+                          backgroundImage: selectedPhotoBytes != null
+                              ? MemoryImage(selectedPhotoBytes!) as ImageProvider
+                              : (selectedPhoto != null
+                                  ? FileImage(selectedPhoto!) as ImageProvider
+                                  : (user?.photoUrl != null && user!.photoUrl!.isNotEmpty
+                                      ? NetworkImage(user.photoUrl!.startsWith('http')
+                                          ? user.photoUrl!
+                                          : '${authProvider.baseUrl}${user.photoUrl}') as ImageProvider
+                                      : null)),
+                          child: (selectedPhotoBytes == null && selectedPhoto == null && (user?.photoUrl == null || user!.photoUrl!.isEmpty))
                               ? const Icon(Icons.camera_alt, color: AppColors.primaryAccent)
                               : null,
                         ),
@@ -339,6 +384,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           name: nameCtrl.text.trim(),
                           phone: phoneCtrl.text.trim(),
                           photo: selectedPhoto,
+                          photoBytes: selectedPhotoBytes,
+                          photoName: selectedPhotoName,
                         );
                         if (success && context.mounted) {
                           Navigator.of(context).pop();
@@ -348,6 +395,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               backgroundColor: AppColors.emeraldGreen,
                             ),
                           );
+                          setState(() {});
                         }
                       },
                       style: ElevatedButton.styleFrom(
@@ -373,14 +421,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final authProvider = context.watch<AuthProvider>();
     final currentUser = authProvider.currentUser;
     final bool isAdmin = currentUser?.isAdmin ?? false;
-    final bool isCustomer = currentUser?.isCustomer ?? false;
+    final bool isCustomer = !isAdmin && !(currentUser?.isEmployee ?? false);
 
     return Scaffold(
       body: RadialBackground(
         child: Column(
           children: [
             AppLogoBar(
-              username: currentUser?.displayName ?? 'المستخدم',
+              username: currentUser?.displayName ?? 'سلمى تهامي',
             ),
             
             Expanded(
@@ -420,7 +468,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      currentUser?.displayName ?? 'المستخدم',
+                                      currentUser?.displayName ?? 'سلمى تهامي',
                                       style: AppStyles.titleMedium.copyWith(fontSize: 18.sp),
                                     ),
                                     if (currentUser?.email != null && currentUser!.email!.isNotEmpty) ...[
