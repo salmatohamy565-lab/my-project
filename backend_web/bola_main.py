@@ -864,7 +864,7 @@ def send_otp_via_email(target_email, code):
         msg['To'] = target_email
         msg['Subject'] = f"كود استعادة كلمة السر: {code}"
 
-        body_text = f"مرحباً،\n\nكود استعادة كلمة السر الخاص بك في Bola Designs هو:\n\n{code}\n\nهذا الكود صالح لمدة 15 دقيقة."
+        body_text = f"مرحباً،\n\nكود استعادة كلمة السر الخاص بك في Bola Designs هو:\n\n{code}\n\nهذا الكود صالح لمدة دقيقة واحدة فقط."
         
         spaced_code = ' '.join(list(code))
         html_body = f"""<!DOCTYPE html>
@@ -891,7 +891,7 @@ def send_otp_via_email(target_email, code):
         }}
         .header {{
             background: linear-gradient(135deg, #0A0A0A, #2B2D31);
-            padding: 30px 20px;
+            padding: 26px 20px;
             color: #FFFFFF;
         }}
         .header h1 {{
@@ -900,14 +900,8 @@ def send_otp_via_email(target_email, code):
             font-weight: 800;
             letter-spacing: 1px;
         }}
-        .header p {{
-            margin: 6px 0 0 0;
-            font-size: 13px;
-            color: #D4AF37;
-            font-weight: 600;
-        }}
         .content {{
-            padding: 36px 24px;
+            padding: 32px 20px;
         }}
         .title {{
             font-size: 22px;
@@ -918,24 +912,26 @@ def send_otp_via_email(target_email, code):
         .subtitle {{
             font-size: 14px;
             color: #5C6066;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             line-height: 1.5;
         }}
         .code-box {{
             background: linear-gradient(135deg, #0A0A0A, #2B2D31);
             color: #FFFFFF;
-            font-size: 36px;
+            font-size: 26px;
             font-weight: 800;
-            letter-spacing: 8px;
-            padding: 18px 28px;
-            border-radius: 16px;
+            letter-spacing: 5px;
+            padding: 14px 18px;
+            border-radius: 14px;
             display: inline-block;
-            margin: 10px 0 24px 0;
+            white-space: nowrap;
+            word-break: keep-all;
+            margin: 10px 0 20px 0;
             box-shadow: 0 6px 20px rgba(10, 10, 10, 0.2);
             border: 2px solid #D4AF37;
         }}
         .footer {{
-            padding: 20px;
+            padding: 18px;
             font-size: 12px;
             color: #5C6066;
             border-top: 1px solid #E9ECEF;
@@ -947,13 +943,12 @@ def send_otp_via_email(target_email, code):
     <div class="card">
         <div class="header">
             <h1>Bola Designs</h1>
-            <p>التصميم الإبداعي وإدارة المهام</p>
         </div>
         <div class="content">
             <div class="title">استعادة كلمة السر 🔐</div>
             <div class="subtitle">أهلاً بك، كود التحقق الخاص بك لإعادة تعيين كلمة السر هو:</div>
             <div class="code-box">{spaced_code}</div>
-            <div class="subtitle">هذا الكود صالح لمدة 15 دقيقة فقط واستخدامه لمرة واحدة.</div>
+            <div class="subtitle">هذا الكود صالح لمدة دقيقة واحدة فقط واستخدامه لمرة واحدة.</div>
         </div>
         <div class="footer">
             © 2026 Bola Designs — جميع الحقوق محفوظة
@@ -995,7 +990,7 @@ def forget_password_api():
 
     import random
     otp_code = str(random.randint(100000, 999999))
-    expires = time.time() + 900
+    expires = time.time() + 60
     
     RESET_CODES[email.lower()] = {
         'code': otp_code,
