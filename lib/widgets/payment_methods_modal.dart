@@ -448,7 +448,7 @@ class _PaymentMethodsModalState extends State<PaymentMethodsModal> {
                                   style: TextStyle(color: AppColors.successStart, fontWeight: FontWeight.bold, fontSize: 12.sp),
                                 ),
                                 Text(
-                                  _proofFileName ?? (_proofFile != null ? _proofFile!.path.split(Platform.pathSeparator).last : 'صورة الإيصال'),
+                                  _proofFileName ?? (_proofFile != null && !kIsWeb ? _proofFile!.path.split('/').last : 'صورة الإيصال'),
                                   style: TextStyle(color: AppColors.textMuted, fontSize: 10.sp),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,

@@ -98,17 +98,41 @@ class ApiService {
   }
 
   Future<void> _ensureWorkingBaseUrl() async {
+    final candidateUrls = [
+      'https://bola-designs-backend.onrender.com',
+      'http://127.0.0.1:5001',
+      'http://localhost:5001',
+      if (!kIsWeb && Platform.isAndroid) 'http://10.0.2.2:5001',
+    ];
+
     try {
       final pingDio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 15),
+        connectTimeout: const Duration(seconds: 3),
+        receiveTimeout: const Duration(seconds: 3),
       ));
       final res = await pingDio.get('$_baseUrl/health');
       if (res.statusCode == 200) return;
-    } catch (_) {
-      _baseUrl = defaultBaseUrl;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('api_base_url', _baseUrl);
+    } catch (_) {}
+
+    for (final url in candidateUrls) {
+      try {
+        final pingDio = Dio(BaseOptions(
+          connectTimeout: const Duration(seconds: 3),
+          receiveTimeout: const Duration(seconds: 3),
+        ));
+        final res = await pingDio.get('$url/health');
+        if (res.statusCode == 200) {
+          _baseUrl = url;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('api_base_url', _baseUrl);
+          print('[API SERVICE] Switched working baseUrl to: $_baseUrl');
+          return;
+        }
+      } catch (_) {}
+    }
+
+    if (kIsWeb) {
+      _baseUrl = 'http://127.0.0.1:5001';
     }
   }
 
