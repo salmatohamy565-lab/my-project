@@ -321,12 +321,12 @@ class ApiService {
         'total_price': totalPrice.toString(),
       };
 
-      if (paymentProofBytes != null && paymentProofName != null && paymentProofName.isNotEmpty) {
+      if (paymentProofBytes != null && paymentProofBytes.isNotEmpty) {
         dataMap['payment_proof'] = MultipartFile.fromBytes(
           paymentProofBytes,
-          filename: paymentProofName,
+          filename: paymentProofName ?? 'receipt_${DateTime.now().millisecondsSinceEpoch}.jpg',
         );
-      } else if (paymentProof != null && paymentProof.path.isNotEmpty) {
+      } else if (paymentProof != null && !kIsWeb && paymentProof.path.isNotEmpty) {
         final fileName = paymentProof.path.split(paymentProof.path.contains('\\') ? '\\' : '/').last;
         dataMap['payment_proof'] = await MultipartFile.fromFile(paymentProof.path, filename: fileName);
       }

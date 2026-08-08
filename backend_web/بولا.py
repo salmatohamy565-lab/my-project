@@ -8,7 +8,7 @@ if sys.platform == "win32":
         pass
 
 from datetime import timedelta, datetime
-from flask import Flask, request, jsonify, abort, session, send_from_directory, render_template, redirect, url_for
+from flask import Flask, request, jsonify, abort, session, send_from_directory, render_template, redirect, url_for, make_response
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text, or_
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -25,8 +25,8 @@ try:
 except ImportError:
     pass
 
+from supabase_storage import SupabaseStorageManager
 try:
-    from supabase_storage import SupabaseStorageManager
     storage_mgr = SupabaseStorageManager()
 except Exception:
     storage_mgr = None
@@ -34,7 +34,14 @@ except Exception:
 from flask_cors import CORS
 
 app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), 'templates'), static_folder=os.path.join(os.path.dirname(__file__), 'static'))
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
+
+@app.before_request
+def handle_options_preflight():
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.status_code = 200
+        return response
 
 @app.after_request
 def add_cors_headers(response):
@@ -44,8 +51,8 @@ def add_cors_headers(response):
     else:
         response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Credentials'] = 'true'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Cookie,X-Requested-With'
-    response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Cookie, X-Requested-With, Accept'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, PUT, POST, DELETE, OPTIONS'
     return response
 
 # قاعدة البيانات: القراءة من DATABASE_URL أولاً مع Supabase Postgres كـ default لبيئة Vercel/Cloud
