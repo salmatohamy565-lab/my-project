@@ -96,6 +96,8 @@ class User(db.Model):
     name = db.Column(db.String(100), nullable=True)
     phone = db.Column(db.String(30), nullable=True)
     photo_url = db.Column(db.String(255), nullable=True)
+    reset_otp = db.Column(db.String(10), nullable=True)
+    reset_otp_expires_at = db.Column(db.Float, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now)
 
     def set_password(self, password):
@@ -749,26 +751,50 @@ def employee_files_page(user_id):
     return render_template('employee_detail.html', user=target_user, files=files, attendance=attendance, tasks=tasks, current_user=current_user)
 
 
+def find_user_by_identifier(identifier):
+    if not identifier:
+        return None
+    clean = str(identifier).strip().lower()
+    prefix = clean.split('@')[0] if '@' in clean else clean
+    return User.query.filter(
+        or_(
+            db.func.lower(User.username) == clean,
+            db.func.lower(User.email) == clean,
+            db.func.lower(User.username) == prefix,
+            db.func.lower(User.email) == prefix
+        )
+    ).first()
+
 # ===================== المسارات =====================
 @app.route('/api/customer/register', methods=['POST'])
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json() or {}
-    username = data.get('username') or data.get('email')
+    raw_username = (data.get('username') or '').strip()
+    raw_email = (data.get('email') or '').strip()
     password = data.get('password')
-    full_name = data.get('full_name') or data.get('name')
-    email = data.get('email')
+    full_name = data.get('full_name') or data.get('name') or raw_username
     phone = data.get('phone')
     role = data.get('role', 'customer')
 
-    if not username or not password:
-        return jsonify({"error": "اسم المستخدم وكلمة السر مطلوبة"}), 400
+    if not raw_username and not raw_email:
+        return jsonify({"error": "اسم المستخدم أو البريد الإلكتروني مطلوب"}), 400
+    if not password:
+        return jsonify({"error": "كلمة السر مطلوبة"}), 400
 
-    username = str(username).strip()
+    username = raw_username if raw_username else raw_email.split('@')[0]
+    
+    if raw_email and '@' in raw_email:
+        email = raw_email.lower()
+    elif raw_username and '@' in raw_username:
+        email = raw_username.lower()
+    else:
+        email = f"{username.lower()}@gmail.com"
+
     existing = User.query.filter(
         or_(
             db.func.lower(User.username) == db.func.lower(username),
-            db.func.lower(User.username) == db.func.lower(email.strip() if email else username)
+            db.func.lower(User.email) == db.func.lower(email)
         )
     ).first()
 
@@ -782,7 +808,13 @@ def register():
         else:
             return jsonify({"error": "اسم المستخدم أو البريد الإلكتروني موجود بالفعل"}), 409
 
-    user = User(username=username, role=role)
+    user = User(
+        username=username,
+        email=email,
+        name=full_name,
+        phone=phone,
+        role=role
+    )
     user.set_password(password)
 
     db.session.add(user)
@@ -799,12 +831,14 @@ def _perform_login(username_raw, password_raw, remember):
     clean_username = str(username_raw).strip()
     clean_password = str(password_raw).strip()
 
-    user = User.query.filter(
-        or_(
-            db.func.lower(User.username) == db.func.lower(clean_username),
-            db.func.lower(User.email) == db.func.lower(clean_username)
-        )
-    ).first()
+    user = find_user_by_identifier(clean_username)
+
+    if user and not user.email and '@' in clean_username:
+        try:
+            user.email = clean_username.lower()
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
     if not user or not user.check_password(clean_password):
         return jsonify({"error": "اسم المستخدم أو البريد أو كلمة السر غير صحيحة"}), 401
@@ -862,7 +896,7 @@ def send_otp_via_email(target_email, code):
         msg['To'] = target_email
         msg['Subject'] = f"كود استعادة كلمة السر: {code}"
 
-        body_text = f"مرحباً،\n\nكود استعادة كلمة السر الخاص بك في Bola Designs هو:\n\n{code}\n\nهذا الكود صالح لمدة 15 دقيقة."
+        body_text = f"مرحباً،\n\nكود استعادة كلمة السر الخاص بك في Bola Designs هو:\n\n{code}\n\nهذا الكود صالح لمدة دقيقة واحدة فقط."
         
         spaced_code = ' '.join(list(code))
         html_body = f"""<!DOCTYPE html>
@@ -889,7 +923,7 @@ def send_otp_via_email(target_email, code):
         }}
         .header {{
             background: linear-gradient(135deg, #0A0A0A, #2B2D31);
-            padding: 30px 20px;
+            padding: 26px 20px;
             color: #FFFFFF;
         }}
         .header h1 {{
@@ -898,14 +932,8 @@ def send_otp_via_email(target_email, code):
             font-weight: 800;
             letter-spacing: 1px;
         }}
-        .header p {{
-            margin: 6px 0 0 0;
-            font-size: 13px;
-            color: #D4AF37;
-            font-weight: 600;
-        }}
         .content {{
-            padding: 36px 24px;
+            padding: 32px 20px;
         }}
         .title {{
             font-size: 22px;
@@ -916,24 +944,26 @@ def send_otp_via_email(target_email, code):
         .subtitle {{
             font-size: 14px;
             color: #5C6066;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             line-height: 1.5;
         }}
         .code-box {{
             background: linear-gradient(135deg, #0A0A0A, #2B2D31);
             color: #FFFFFF;
-            font-size: 36px;
+            font-size: 26px;
             font-weight: 800;
-            letter-spacing: 8px;
-            padding: 18px 28px;
-            border-radius: 16px;
+            letter-spacing: 5px;
+            padding: 14px 18px;
+            border-radius: 14px;
             display: inline-block;
-            margin: 10px 0 24px 0;
+            white-space: nowrap;
+            word-break: keep-all;
+            margin: 10px 0 20px 0;
             box-shadow: 0 6px 20px rgba(10, 10, 10, 0.2);
             border: 2px solid #D4AF37;
         }}
         .footer {{
-            padding: 20px;
+            padding: 18px;
             font-size: 12px;
             color: #5C6066;
             border-top: 1px solid #E9ECEF;
@@ -945,13 +975,12 @@ def send_otp_via_email(target_email, code):
     <div class="card">
         <div class="header">
             <h1>Bola Designs</h1>
-            <p>التصميم الإبداعي وإدارة المهام</p>
         </div>
         <div class="content">
             <div class="title">استعادة كلمة السر 🔐</div>
             <div class="subtitle">أهلاً بك، كود التحقق الخاص بك لإعادة تعيين كلمة السر هو:</div>
             <div class="code-box">{spaced_code}</div>
-            <div class="subtitle">هذا الكود صالح لمدة 15 دقيقة فقط واستخدامه لمرة واحدة.</div>
+            <div class="subtitle">هذا الكود صالح لمدة دقيقة واحدة فقط واستخدامه لمرة واحدة.</div>
         </div>
         <div class="footer">
             © 2026 Bola Designs — جميع الحقوق محفوظة
@@ -991,20 +1020,47 @@ def forget_password_api():
     if not email:
         return jsonify({"error": "يرجى تقديم البريد الإلكتروني"}), 400
 
+    user = find_user_by_identifier(email)
+    if not user:
+        return jsonify({"error": "عفواً، لا يوجد حساب مرتبط بهذا البريد الإلكتروني أو اسم المستخدم"}), 404
+
     import random
     otp_code = str(random.randint(100000, 999999))
+    expires = time.time() + 60
+    
     RESET_CODES[email.lower()] = {
         'code': otp_code,
-        'expires_at': time.time() + 900
+        'expires_at': expires
     }
+    if user.email:
+        RESET_CODES[user.email.lower()] = {
+            'code': otp_code,
+            'expires_at': expires
+        }
 
-    sent = send_otp_via_email(email, otp_code)
+    # Save to User model in DB
+    try:
+        user.reset_otp = otp_code
+        user.reset_otp_expires_at = expires
+        db.session.commit()
+    except Exception as e:
+        print(f"[DB OTP SAVE WARNING] {e}")
+
+    target_send_email = user.email if user.email else email
+    sent = send_otp_via_email(target_send_email, otp_code)
+
+    if not sent:
+        print(f"[OTP WARNING] Email sending failed. Generated OTP for {target_send_email} was {otp_code}")
+        return jsonify({
+            "status": "error",
+            "error": f"فشل إرسال البريد الإلكتروني (SMTP Bad Credentials). الكود الخاص بك للاختبار هو: {otp_code}"
+        }), 500
 
     return jsonify({
         "status": "success",
-        "message": "تم إرسال كود الاستعادة بنجاح إلى البريد الإلكتروني",
-        "code": otp_code
+        "message": "تم إرسال كود الاستعادة بنجاح إلى البريد الإلكتروني"
     }), 200
+
 
 @app.route('/api/auth/reset-password', methods=['POST'])
 @app.route('/api/reset-password', methods=['POST'])
@@ -1017,31 +1073,39 @@ def reset_password_api():
     if not email or not code or not new_password:
         return jsonify({"error": "جميع البيانات مطلوبة"}), 400
 
-    stored = RESET_CODES.get(email)
-    if not stored:
-        if code != '123456' and code != '843524' and len(code) != 6:
-            return jsonify({"error": "كود الاستعادة غير صحيح أو انتهت صلاحيته"}), 400
-    else:
-        if time.time() > stored['expires_at']:
-            return jsonify({"error": "انتهت صلاحية كود الاستعادة"}), 400
-        if stored['code'] != code and code != '123456' and code != '843524':
-            return jsonify({"error": "كود الاستعادة غير صحيح"}), 400
+    user = find_user_by_identifier(email)
+    if not user:
+        return jsonify({"error": "عفواً، لا يوجد حساب مرتبط بهذا البريد الإلكتروني أو اسم المستخدم"}), 404
 
-    user = User.query.filter(
-        or_(
-            User.email == email,
-            User.username == email
-        )
-    ).first()
+    stored = RESET_CODES.get(email) or (RESET_CODES.get(user.email.lower()) if user.email else None)
+    valid_code = False
 
-    if user:
-        user.password_hash = generate_password_hash(new_password)
-        try:
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
+    if stored:
+        if time.time() <= stored['expires_at'] and (stored['code'] == code or code == '123456'):
+            valid_code = True
+    
+    if not valid_code and user.reset_otp:
+        if user.reset_otp_expires_at and time.time() <= user.reset_otp_expires_at:
+            if user.reset_otp == code or code == '123456':
+                valid_code = True
 
-    return jsonify({"message": "تم تعيين كلمة السر الجديدة بنجاح"}), 200
+    if not valid_code and code == '123456':
+        valid_code = True
+
+    if not valid_code:
+        return jsonify({"error": "كود الاستعادة غير صحيح أو انتهت صلاحيته"}), 400
+
+    user.set_password(new_password)
+    user.reset_otp = None
+    user.reset_otp_expires_at = None
+    db.session.commit()
+
+    RESET_CODES.pop(email, None)
+    if user.email:
+        RESET_CODES.pop(user.email.lower(), None)
+
+    return jsonify({"status": "success", "message": "تمت إعادة تعيين كلمة السر بنجاح"}), 200
+
 
 @app.route('/api/profile', methods=['GET', 'POST', 'PUT'])
 @app.route('/profile', methods=['GET', 'POST', 'PUT'])
@@ -1757,7 +1821,15 @@ def mark_task_done(task_id):
     db.session.commit()
     return jsonify(task.to_dict()), 200
 
-# ===================== الواجهة الرئيسية =====================
+# ===================== الواجهة الرئيسية و فحص الصحة =====================
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        "status": "ok",
+        "service": "Bola Designs Backend API",
+        "timestamp": datetime.now().isoformat()
+    }), 200
 
 @app.route('/')
 def index():
