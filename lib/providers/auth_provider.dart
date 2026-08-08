@@ -215,13 +215,15 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         return true;
       }
-    } catch (_) {
-      if (code == _demoResetCode || code == '123456' || code == '584920' || code.length == 6) {
-        _isLoading = false;
-        _errorMessage = null;
-        notifyListeners();
-        return true;
+    } on DioException catch (e) {
+      final serverData = e.response?.data;
+      if (serverData != null && serverData['error'] != null) {
+        _errorMessage = serverData['error'].toString();
+      } else {
+        _errorMessage = 'كود الاستعادة غير صحيح أو انتهت صلاحيته';
       }
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
     }
 
     _isLoading = false;

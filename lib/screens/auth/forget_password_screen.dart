@@ -20,7 +20,18 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
   final _codeController = TextEditingController();
   final _newPasswordController = TextEditingController();
   bool _codeSent = false;
+  bool _obscurePassword = true;
   String? _demoCode;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AuthProvider>().clearError();
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -196,11 +207,25 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
                           SizedBox(height: 16.h),
                           TextFormField(
                             controller: _newPasswordController,
-                            obscureText: true,
+                            obscureText: _obscurePassword,
                             textAlign: TextAlign.right,
-                            decoration: const InputDecoration(
+                            style: const TextStyle(color: AppColors.textMain),
+                            decoration: InputDecoration(
                               labelText: 'كلمة السر الجديدة',
-                              prefixIcon: Icon(Icons.lock_outline, color: AppColors.primaryAccent),
+                              prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primaryAccent),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  color: AppColors.primaryAccent,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
+                              ),
                             ),
                           ),
                           SizedBox(height: 24.h),

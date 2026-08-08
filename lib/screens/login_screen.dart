@@ -34,6 +34,11 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     _loadSavedLogin();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AuthProvider>().clearError();
+      }
+    });
   }
 
   @override
@@ -319,12 +324,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           },
                           decoration: InputDecoration(
                             hintText: 'أدخل كلمة السر',
-                            prefixIcon: IconButton(
+                            prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textMuted),
+                            suffixIcon: IconButton(
                               icon: Icon(
                                 _obscurePassword
                                     ? Icons.visibility_off_outlined
                                     : Icons.visibility_outlined,
-                                color: AppColors.textMuted,
+                                color: AppColors.primaryAccent,
                               ),
                               onPressed: () => setState(() {
                                 _obscurePassword = !_obscurePassword;
