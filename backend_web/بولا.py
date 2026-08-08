@@ -1831,14 +1831,44 @@ def health_check():
         "timestamp": datetime.now().isoformat()
     }), 200
 
+@app.route('/download', methods=['GET'])
+@app.route('/app', methods=['GET'])
+def download_page():
+    return render_template('download.html')
+
+@app.route('/download-apk', methods=['GET'])
+@app.route('/download/apk', methods=['GET'])
+def download_apk_file():
+    try:
+        apk_path = os.path.join(app.static_folder, 'app-release.apk')
+        if os.path.exists(apk_path):
+            return send_from_directory(
+                app.static_folder,
+                'app-release.apk',
+                as_attachment=True,
+                download_name='BolaDesigns.apk',
+                mimetype='application/vnd.android.package-archive'
+            )
+        root_apk = os.path.join(app.root_path, '..', 'app-release.apk')
+        if os.path.exists(root_apk):
+            return send_from_directory(
+                os.path.abspath(os.path.join(app.root_path, '..')),
+                'app-release.apk',
+                as_attachment=True,
+                download_name='BolaDesigns.apk',
+                mimetype='application/vnd.android.package-archive'
+            )
+    except Exception as e:
+        print(f"[APK DOWNLOAD ERROR] {e}")
+    return jsonify({"error": "ملف APK غير متاح حالياً"}), 404
+
 @app.route('/')
 def index():
     current_user = get_current_user()
     if current_user:
         target = '/admin' if current_user.role == 'admin' else '/employee'
     else:
-        target = '/login'
-    # show a splash screen first, then redirect to the intended target
+        target = '/download'
     return redirect(url_for('splash', next=target))
 
 @app.route('/login')
