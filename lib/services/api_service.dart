@@ -56,8 +56,9 @@ class ApiService {
             err.error is SocketException) {
           
           final candidateUrls = [
-            'http://10.0.2.2:5001',
+            'http://127.0.0.1:5001',
             'http://localhost:5001',
+            'http://10.0.2.2:5001',
             'http://192.168.1.18:5001',
             'https://bola-designs-backend.onrender.com',
           ];
@@ -66,10 +67,10 @@ class ApiService {
             if (candidate == _baseUrl) continue;
             try {
               final testDio = Dio(BaseOptions(
-                connectTimeout: const Duration(seconds: 2),
-                receiveTimeout: const Duration(seconds: 2),
+                connectTimeout: const Duration(seconds: 3),
+                receiveTimeout: const Duration(seconds: 3),
               ));
-              final pingRes = await testDio.get('$candidate/api/public/products');
+              final pingRes = await testDio.get('$candidate/health');
               if (pingRes.statusCode == 200) {
                 await setBaseUrl(candidate);
                 
@@ -126,17 +127,26 @@ class ApiService {
   Future<void> _ensureWorkingBaseUrl() async {
     try {
       final pingDio = Dio(BaseOptions(
-        connectTimeout: const Duration(milliseconds: 1500),
-        receiveTimeout: const Duration(milliseconds: 1500),
+        connectTimeout: const Duration(seconds: 3),
+        receiveTimeout: const Duration(seconds: 3),
       ));
-      final res = await pingDio.get('$_baseUrl/api/public/products');
+      final res = await pingDio.get('$_baseUrl/health');
       if (res.statusCode == 200) return;
-    } catch (_) {}
+    } catch (_) {
+      try {
+        final pingDio = Dio(BaseOptions(
+          connectTimeout: const Duration(seconds: 3),
+          receiveTimeout: const Duration(seconds: 3),
+        ));
+        final res = await pingDio.get('$_baseUrl/api/public/products');
+        if (res.statusCode == 200) return;
+      } catch (_) {}
+    }
 
     final candidates = [
-      'http://10.0.2.2:5001',
       'http://127.0.0.1:5001',
       'http://localhost:5001',
+      'http://10.0.2.2:5001',
       'http://192.168.1.18:5001',
       'https://bola-designs-backend.onrender.com',
     ];
@@ -145,15 +155,27 @@ class ApiService {
       if (candidate == _baseUrl) continue;
       try {
         final pingDio = Dio(BaseOptions(
-          connectTimeout: const Duration(milliseconds: 1500),
-          receiveTimeout: const Duration(milliseconds: 1500),
+          connectTimeout: const Duration(seconds: 3),
+          receiveTimeout: const Duration(seconds: 3),
         ));
-        final res = await pingDio.get('$candidate/api/public/products');
+        final res = await pingDio.get('$candidate/health');
         if (res.statusCode == 200) {
           await setBaseUrl(candidate);
           return;
         }
-      } catch (_) {}
+      } catch (_) {
+        try {
+          final pingDio = Dio(BaseOptions(
+            connectTimeout: const Duration(seconds: 3),
+            receiveTimeout: const Duration(seconds: 3),
+          ));
+          final res = await pingDio.get('$candidate/api/public/products');
+          if (res.statusCode == 200) {
+            await setBaseUrl(candidate);
+            return;
+          }
+        } catch (_) {}
+      }
     }
   }
 
