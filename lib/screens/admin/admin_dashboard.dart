@@ -599,12 +599,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            children: [
-                              Icon(Icons.receipt_long_rounded, color: AppColors.primaryAccent, size: 20.r),
-                              SizedBox(width: 8.w),
-                              Text('إيصالات التحويل للراجعة (InstaPay / Cash)', style: AppStyles.titleMedium),
-                            ],
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Icon(Icons.receipt_long_rounded, color: AppColors.primaryAccent, size: 20.r),
+                                SizedBox(width: 8.w),
+                                Expanded(
+                                  child: Text('إيصالات التحويل للراجعة (InstaPay / Cash)', style: AppStyles.titleMedium, overflow: TextOverflow.ellipsis),
+                                ),
+                              ],
+                            ),
                           ),
                           Container(
                             padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
