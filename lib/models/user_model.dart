@@ -21,7 +21,12 @@ class UserModel {
   bool get isEmployee => role == 'employee';
   bool get isCustomer => !isAdmin && !isEmployee;
 
-  String get displayName => (name != null && name!.trim().isNotEmpty) ? name! : username;
+  String get displayName {
+    if (name != null && name!.trim().isNotEmpty) return name!.trim();
+    if (username.trim().isNotEmpty) return username.trim();
+    if (email != null && email!.trim().isNotEmpty) return email!.split('@').first.trim();
+    return 'عميل بولا ديزاينز';
+  }
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(

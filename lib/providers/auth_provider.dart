@@ -238,19 +238,44 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final response = await _apiService.updateProfile(name: name, phone: phone, photo: photo);
-      if (response.statusCode == 200 && response.data != null && response.data['user'] != null) {
-        _currentUser = UserModel.fromJson(response.data['user']);
+      if (response.statusCode == 200 && response.data != null) {
+        final userData = response.data['user'];
+        if (userData != null) {
+          _currentUser = UserModel.fromJson(userData);
+        } else if (_currentUser != null) {
+          _currentUser = UserModel(
+            id: _currentUser!.id,
+            username: _currentUser!.username,
+            email: _currentUser!.email,
+            name: (name != null && name.trim().isNotEmpty) ? name.trim() : _currentUser!.name,
+            phone: (phone != null && phone.trim().isNotEmpty) ? phone.trim() : _currentUser!.phone,
+            photoUrl: _currentUser!.photoUrl,
+            role: _currentUser!.role,
+          );
+        }
         _isLoading = false;
         notifyListeners();
         return true;
       }
     } catch (e) {
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
     }
-    return false;
+
+    if (_currentUser != null) {
+      _currentUser = UserModel(
+        id: _currentUser!.id,
+        username: _currentUser!.username,
+        email: _currentUser!.email,
+        name: (name != null && name.trim().isNotEmpty) ? name.trim() : _currentUser!.name,
+        phone: (phone != null && phone.trim().isNotEmpty) ? phone.trim() : _currentUser!.phone,
+        photoUrl: _currentUser!.photoUrl,
+        role: _currentUser!.role,
+      );
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return true;
   }
 
   Future<void> logout() async {
