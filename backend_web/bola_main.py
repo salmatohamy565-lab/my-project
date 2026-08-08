@@ -826,6 +826,13 @@ def _perform_login(username_raw, password_raw, remember):
 
     user = find_user_by_identifier(clean_username)
 
+    if user and not user.email and '@' in clean_username:
+        try:
+            user.email = clean_username.lower()
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
     if not user or not user.check_password(clean_password):
         return jsonify({"error": "اسم المستخدم أو البريد أو كلمة السر غير صحيحة"}), 401
 
