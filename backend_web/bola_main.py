@@ -751,6 +751,20 @@ def employee_files_page(user_id):
     return render_template('employee_detail.html', user=target_user, files=files, attendance=attendance, tasks=tasks, current_user=current_user)
 
 
+def find_user_by_identifier(identifier):
+    if not identifier:
+        return None
+    clean = str(identifier).strip().lower()
+    prefix = clean.split('@')[0] if '@' in clean else clean
+    return User.query.filter(
+        or_(
+            db.func.lower(User.username) == clean,
+            db.func.lower(User.email) == clean,
+            db.func.lower(User.username) == prefix,
+            db.func.lower(User.email) == prefix
+        )
+    ).first()
+
 # ===================== المسارات =====================
 @app.route('/api/customer/register', methods=['POST'])
 @app.route('/api/register', methods=['POST'])
@@ -767,10 +781,13 @@ def register():
         return jsonify({"error": "اسم المستخدم وكلمة السر مطلوبة"}), 400
 
     username = str(username).strip()
+    clean_email = email.strip().lower() if email else username.lower()
+
     existing = User.query.filter(
         or_(
             db.func.lower(User.username) == db.func.lower(username),
-            db.func.lower(User.username) == db.func.lower(email.strip() if email else username)
+            db.func.lower(User.email) == db.func.lower(clean_email),
+            db.func.lower(User.username) == db.func.lower(clean_email)
         )
     ).first()
 
@@ -784,7 +801,13 @@ def register():
         else:
             return jsonify({"error": "اسم المستخدم أو البريد الإلكتروني موجود بالفعل"}), 409
 
-    user = User(username=username, role=role)
+    user = User(
+        username=username,
+        email=clean_email,
+        name=full_name,
+        phone=phone,
+        role=role
+    )
     user.set_password(password)
 
     db.session.add(user)
@@ -801,12 +824,7 @@ def _perform_login(username_raw, password_raw, remember):
     clean_username = str(username_raw).strip()
     clean_password = str(password_raw).strip()
 
-    user = User.query.filter(
-        or_(
-            db.func.lower(User.username) == db.func.lower(clean_username),
-            db.func.lower(User.email) == db.func.lower(clean_username)
-        )
-    ).first()
+    user = find_user_by_identifier(clean_username)
 
     if not user or not user.check_password(clean_password):
         return jsonify({"error": "اسم المستخدم أو البريد أو كلمة السر غير صحيحة"}), 401
@@ -988,6 +1006,10 @@ def forget_password_api():
     if not email:
         return jsonify({"error": "يرجى تقديم البريد الإلكتروني"}), 400
 
+    user = find_user_by_identifier(email)
+    if not user:
+        return jsonify({"error": "عفواً، لا يوجد حساب مرتبط بهذا البريد الإلكتروني أو اسم المستخدم"}), 404
+
     import random
     otp_code = str(random.randint(100000, 999999))
     expires = time.time() + 60
@@ -996,26 +1018,25 @@ def forget_password_api():
         'code': otp_code,
         'expires_at': expires
     }
+    if user.email:
+        RESET_CODES[user.email.lower()] = {
+            'code': otp_code,
+            'expires_at': expires
+        }
 
-    # Save to User model in DB if exists
+    # Save to User model in DB
     try:
-        user = User.query.filter(
-            or_(
-                db.func.lower(User.email) == email.lower(),
-                db.func.lower(User.username) == email.lower()
-            )
-        ).first()
-        if user:
-            user.reset_otp = otp_code
-            user.reset_otp_expires_at = expires
-            db.session.commit()
+        user.reset_otp = otp_code
+        user.reset_otp_expires_at = expires
+        db.session.commit()
     except Exception as e:
         print(f"[DB OTP SAVE WARNING] {e}")
 
-    sent = send_otp_via_email(email, otp_code)
+    target_send_email = user.email if user.email else email
+    sent = send_otp_via_email(target_send_email, otp_code)
 
     if not sent:
-        print(f"[OTP WARNING] Email sending failed. Generated OTP for {email} was {otp_code}")
+        print(f"[OTP WARNING] Email sending failed. Generated OTP for {target_send_email} was {otp_code}")
         return jsonify({
             "status": "error",
             "error": f"فشل إرسال البريد الإلكتروني (SMTP Bad Credentials). الكود الخاص بك للاختبار هو: {otp_code}"
@@ -1038,21 +1059,18 @@ def reset_password_api():
     if not email or not code or not new_password:
         return jsonify({"error": "جميع البيانات مطلوبة"}), 400
 
-    user = User.query.filter(
-        or_(
-            db.func.lower(User.email) == email,
-            db.func.lower(User.username) == email
-        )
-    ).first()
+    user = find_user_by_identifier(email)
+    if not user:
+        return jsonify({"error": "عفواً، لا يوجد حساب مرتبط بهذا البريد الإلكتروني أو اسم المستخدم"}), 404
 
-    stored = RESET_CODES.get(email)
+    stored = RESET_CODES.get(email) or (RESET_CODES.get(user.email.lower()) if user.email else None)
     valid_code = False
 
     if stored:
         if time.time() <= stored['expires_at'] and (stored['code'] == code or code == '123456'):
             valid_code = True
     
-    if not valid_code and user and user.reset_otp:
+    if not valid_code and user.reset_otp:
         if user.reset_otp_expires_at and time.time() <= user.reset_otp_expires_at:
             if user.reset_otp == code or code == '123456':
                 valid_code = True
@@ -1063,13 +1081,15 @@ def reset_password_api():
     if not valid_code:
         return jsonify({"error": "كود الاستعادة غير صحيح أو انتهت صلاحيته"}), 400
 
-    if user:
-        user.set_password(new_password)
-        user.reset_otp = None
-        user.reset_otp_expires_at = None
-        db.session.commit()
+    user.set_password(new_password)
+    user.reset_otp = None
+    user.reset_otp_expires_at = None
+    db.session.commit()
 
     RESET_CODES.pop(email, None)
+    if user.email:
+        RESET_CODES.pop(user.email.lower(), None)
+
     return jsonify({"status": "success", "message": "تمت إعادة تعيين كلمة السر بنجاح"}), 200
 
 
