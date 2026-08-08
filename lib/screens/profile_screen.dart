@@ -9,6 +9,7 @@ import '../providers/auth_provider.dart';
 import '../widgets/radial_background.dart';
 import '../widgets/custom_bottom_nav_bar.dart';
 import '../widgets/app_logo_bar.dart';
+import '../services/api_service.dart';
 import '../widgets/payment_methods_modal.dart';
 import 'login_screen.dart';
 import 'admin/archived_tasks_screen.dart';
@@ -22,6 +23,222 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  final ApiService _apiService = ApiService();
+  int _pendingCount = 0;
+  int _preparingCount = 0;
+  int _readyCount = 0;
+  int _completedCount = 0;
+  bool _isLoadingOrders = false;
+  List<dynamic> _rawOrders = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCustomerOrders();
+  }
+
+  Future<void> _fetchCustomerOrders() async {
+    if (!mounted) return;
+    setState(() => _isLoadingOrders = true);
+    try {
+      final res = await _apiService.getOrders();
+      if (res.statusCode == 200 && mounted) {
+        final List<dynamic> data = res.data ?? [];
+        setState(() {
+          _rawOrders = data;
+          _pendingCount = data.where((o) => (o['status'] ?? '').toString().toLowerCase() == 'pending').length;
+          _preparingCount = data.where((o) {
+            final st = (o['status'] ?? '').toString().toLowerCase();
+            return st == 'preparing' || st == 'in_progress' || st == 'processing';
+          }).length;
+          _readyCount = data.where((o) => (o['status'] ?? '').toString().toLowerCase() == 'ready').length;
+          _completedCount = data.where((o) {
+            final st = (o['status'] ?? '').toString().toLowerCase();
+            return st == 'completed' || st == 'done';
+          }).length;
+          _isLoadingOrders = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingOrders = false);
+    }
+  }
+
+  void _showOrdersModal(BuildContext context, {String? filterStatus, String? filterTitle}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.cardBg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+      ),
+      builder: (ctx) {
+        List<dynamic> filtered = _rawOrders;
+        if (filterStatus != null) {
+          filtered = _rawOrders.where((o) {
+            final st = (o['status'] ?? '').toString().toLowerCase();
+            if (filterStatus == 'pending') return st == 'pending';
+            if (filterStatus == 'preparing') return st == 'preparing' || st == 'in_progress' || st == 'processing';
+            if (filterStatus == 'ready') return st == 'ready';
+            if (filterStatus == 'completed') return st == 'completed' || st == 'done';
+            return true;
+          }).toList();
+        }
+
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.7,
+          padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 20.h),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    filterTitle ?? 'طلباتي',
+                    style: AppStyles.titleMedium.copyWith(fontSize: 18.sp),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: AppColors.textMuted),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+              const Divider(color: AppColors.borderLight),
+              SizedBox(height: 12.h),
+
+              Expanded(
+                child: filtered.isEmpty
+                    ? Center(
+                        child: Text(
+                          'لا توجد طلبات في هذه الحالة حالياً',
+                          style: AppStyles.bodyMuted,
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, __) => SizedBox(height: 12.h),
+                        itemBuilder: (context, idx) {
+                          final item = filtered[idx];
+                          final id = item['id'] ?? 0;
+                          final status = (item['status'] ?? 'pending').toString();
+                          final total = item['total_price'] ?? item['total'] ?? 0;
+                          final date = item['created_at'] != null
+                              ? item['created_at'].toString().split('T').first
+                              : '';
+
+                          String statusLabel = 'قيد الموافقة';
+                          Color statusColor = Colors.amber;
+
+                          if (status == 'preparing' || status == 'in_progress') {
+                            statusLabel = 'قيد التنفيذ';
+                            statusColor = Colors.blueAccent;
+                          } else if (status == 'ready') {
+                            statusLabel = 'جاهز للتسليم';
+                            statusColor = Colors.purpleAccent;
+                          } else if (status == 'completed' || status == 'done') {
+                            statusLabel = 'مكتمل';
+                            statusColor = AppColors.emeraldGreen;
+                          } else if (status == 'rejected') {
+                            statusLabel = 'مرفوض';
+                            statusColor = AppColors.dangerStart;
+                          }
+
+                          return Container(
+                            padding: EdgeInsets.all(14.r),
+                            decoration: BoxDecoration(
+                              color: AppColors.inputBg,
+                              borderRadius: BorderRadius.circular(14.r),
+                              border: Border.all(color: AppColors.borderLight),
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 20.r,
+                                  backgroundColor: statusColor.withOpacity(0.15),
+                                  child: Icon(Icons.receipt_long, color: statusColor, size: 20.r),
+                                ),
+                                SizedBox(width: 12.w),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('طلب رقم #$id', style: AppStyles.labelBold),
+                                      if (date.isNotEmpty) ...[
+                                        SizedBox(height: 2.h),
+                                        Text(date, style: AppStyles.bodyMuted.copyWith(fontSize: 11.sp)),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+                                      decoration: BoxDecoration(
+                                        color: statusColor.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(8.r),
+                                      ),
+                                      child: Text(
+                                        statusLabel,
+                                        style: TextStyle(color: statusColor, fontSize: 11.sp, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                    SizedBox(height: 4.h),
+                                    Text('$total ج.م', style: AppStyles.labelBold.copyWith(color: AppColors.primaryAccent)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatusCard({
+    required String title,
+    required int count,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 6.w),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14.r),
+          border: Border.all(color: color.withOpacity(0.3), width: 1),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 22.r),
+            SizedBox(height: 6.h),
+            Text(
+              '$count',
+              style: TextStyle(color: color, fontSize: 16.sp, fontWeight: FontWeight.w800),
+            ),
+            SizedBox(height: 2.h),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: AppColors.textMain, fontSize: 10.sp, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   void _showEditProfileDialog(BuildContext context) {
     final authProvider = context.read<AuthProvider>();
@@ -227,6 +444,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     SizedBox(height: 16.h),
+
+                    // Order Status Tracker Card (قيد الموافقة، قيد التنفيذ، جاهز، مكتمل)
+                    if (isCustomer) ...[
+                      Container(
+                        padding: EdgeInsets.all(16.r),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardBg,
+                          borderRadius: AppStyles.cardRadius,
+                          border: Border.all(color: AppColors.borderLight, width: 1.5),
+                          boxShadow: AppStyles.cardShadow,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.inventory_2_outlined, color: AppColors.primaryAccent, size: 20.r),
+                                    SizedBox(width: 8.w),
+                                    Text(
+                                      'حالة الطلبات',
+                                      style: AppStyles.titleMedium.copyWith(fontSize: 16.sp),
+                                    ),
+                                  ],
+                                ),
+                                InkWell(
+                                  onTap: () => _showOrdersModal(context, filterTitle: 'جميع طلباتي'),
+                                  child: Text(
+                                    'عرض الكل >',
+                                    style: AppStyles.bodyMuted.copyWith(color: AppColors.primaryAccent, fontWeight: FontWeight.bold, fontSize: 12.sp),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 14.h),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildStatusCard(
+                                    title: 'قيد الموافقة',
+                                    count: _pendingCount,
+                                    icon: Icons.hourglass_top_rounded,
+                                    color: Colors.amber,
+                                    onTap: () => _showOrdersModal(context, filterStatus: 'pending', filterTitle: 'طلبات قيد الموافقة'),
+                                  ),
+                                ),
+                                SizedBox(width: 6.w),
+                                Expanded(
+                                  child: _buildStatusCard(
+                                    title: 'قيد التنفيذ',
+                                    count: _preparingCount,
+                                    icon: Icons.build_circle_outlined,
+                                    color: Colors.blueAccent,
+                                    onTap: () => _showOrdersModal(context, filterStatus: 'preparing', filterTitle: 'طلبات قيد التنفيذ'),
+                                  ),
+                                ),
+                                SizedBox(width: 6.w),
+                                Expanded(
+                                  child: _buildStatusCard(
+                                    title: 'جاهز',
+                                    count: _readyCount,
+                                    icon: Icons.local_shipping_outlined,
+                                    color: Colors.purpleAccent,
+                                    onTap: () => _showOrdersModal(context, filterStatus: 'ready', filterTitle: 'طلبات جاهزة للتسليم'),
+                                  ),
+                                ),
+                                SizedBox(width: 6.w),
+                                Expanded(
+                                  child: _buildStatusCard(
+                                    title: 'مكتمل',
+                                    count: _completedCount,
+                                    icon: Icons.check_circle_outline_rounded,
+                                    color: AppColors.emeraldGreen,
+                                    onTap: () => _showOrdersModal(context, filterStatus: 'completed', filterTitle: 'طلبات مكتملة'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 16.h),
+                    ],
 
                     // Actions List
                     Container(

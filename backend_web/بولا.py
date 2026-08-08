@@ -1119,34 +1119,40 @@ def api_profile():
     if request.method in ['POST', 'PUT']:
         name = request.form.get('name') or (request.is_json and request.json and request.json.get('name'))
         phone = request.form.get('phone') or (request.is_json and request.json and request.json.get('phone'))
+        photo_file = request.files.get('photo') or request.files.get('avatar') or request.files.get('file')
 
         if current_user:
             if hasattr(current_user, 'name') and name:
                 current_user.name = name
             if hasattr(current_user, 'phone') and phone:
                 current_user.phone = phone
+
+            if photo_file:
+                try:
+                    filename = secure_filename(photo_file.filename or f"avatar_{current_user.id}.jpg")
+                    safe_path = f"avatars/{current_user.id}_{int(time.time())}_{filename}"
+                    photo_bytes = photo_file.read()
+                    
+                    public_url = storage_mgr.upload_file(
+                        bucket_name='user-uploads',
+                        file_path_in_bucket=safe_path,
+                        file_bytes=photo_bytes,
+                        content_type=photo_file.content_type or 'image/jpeg'
+                    )
+                    if public_url:
+                        current_user.photo_url = public_url
+                except Exception as e:
+                    print(f"[PROFILE PHOTO UPLOAD ERROR] {e}")
+
             try:
                 db.session.commit()
-            except Exception:
+            except Exception as e:
+                print(f"[PROFILE DB COMMIT ERROR] {e}")
                 db.session.rollback()
-            user_dict = current_user.to_dict()
-            if name:
-                user_dict['name'] = name
-            if phone:
-                user_dict['phone'] = phone
-            return jsonify({"message": "تم تحديث الملف الشخصي", "user": user_dict}), 200
 
-        return jsonify({
-            "message": "تم تحديث الملف الشخصي",
-            "user": {
-                "id": 1,
-                "username": name or "user",
-                "name": name or "user",
-                "phone": phone or "",
-                "role": "customer",
-                "is_admin": False
-            }
-        }), 200
+            return jsonify({"message": "تم تحديث الملف الشخصي بنجاح", "user": current_user.to_dict()}), 200
+
+        return jsonify({"error": "المستخدم غير موجود"}), 404
 
     if current_user:
         return jsonify({"user": current_user.to_dict()}), 200
