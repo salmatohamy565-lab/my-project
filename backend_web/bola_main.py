@@ -770,24 +770,31 @@ def find_user_by_identifier(identifier):
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json() or {}
-    username = data.get('username') or data.get('email')
+    raw_username = (data.get('username') or '').strip()
+    raw_email = (data.get('email') or '').strip()
     password = data.get('password')
-    full_name = data.get('full_name') or data.get('name')
-    email = data.get('email')
+    full_name = data.get('full_name') or data.get('name') or raw_username
     phone = data.get('phone')
     role = data.get('role', 'customer')
 
-    if not username or not password:
-        return jsonify({"error": "اسم المستخدم وكلمة السر مطلوبة"}), 400
+    if not raw_username and not raw_email:
+        return jsonify({"error": "اسم المستخدم أو البريد الإلكتروني مطلوب"}), 400
+    if not password:
+        return jsonify({"error": "كلمة السر مطلوبة"}), 400
 
-    username = str(username).strip()
-    clean_email = email.strip().lower() if email else username.lower()
+    username = raw_username if raw_username else raw_email.split('@')[0]
+    
+    if raw_email and '@' in raw_email:
+        email = raw_email.lower()
+    elif raw_username and '@' in raw_username:
+        email = raw_username.lower()
+    else:
+        email = f"{username.lower()}@gmail.com"
 
     existing = User.query.filter(
         or_(
             db.func.lower(User.username) == db.func.lower(username),
-            db.func.lower(User.email) == db.func.lower(clean_email),
-            db.func.lower(User.username) == db.func.lower(clean_email)
+            db.func.lower(User.email) == db.func.lower(email)
         )
     ).first()
 
@@ -803,7 +810,7 @@ def register():
 
     user = User(
         username=username,
-        email=clean_email,
+        email=email,
         name=full_name,
         phone=phone,
         role=role
