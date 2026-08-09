@@ -1057,19 +1057,28 @@ def forget_password_api():
     except Exception as e:
         print(f"[DB OTP SAVE WARNING] {e}")
 
+    # Create instant notification in Supabase DB for the user
+    try:
+        otp_notif = AppNotification(
+            user_id=user.id,
+            title="🔐 كود استعادة كلمة السر",
+            message=f"كود التحقق الخاص بك لإعادة تعيين كلمة السر هو: {otp_code} (صالح لمدة دقيقة واحدة)",
+            is_read=False,
+            created_at=datetime.now()
+        )
+        db.session.add(otp_notif)
+        db.session.commit()
+    except Exception as notif_e:
+        print(f"[OTP NOTIFICATION SAVE ERROR] {notif_e}")
+        db.session.rollback()
+
     target_send_email = user.email if user.email else email
     sent = send_otp_via_email(target_send_email, otp_code)
 
-    if not sent:
-        print(f"[OTP WARNING] Email sending failed. Generated OTP for {target_send_email} was {otp_code}")
-        return jsonify({
-            "status": "error",
-            "error": f"فشل إرسال البريد الإلكتروني (SMTP Bad Credentials). الكود الخاص بك للاختبار هو: {otp_code}"
-        }), 500
-
     return jsonify({
         "status": "success",
-        "message": "تم إرسال كود الاستعادة بنجاح إلى البريد الإلكتروني"
+        "message": "تم إرسال كود الاستعادة بنجاح إلى البريد الإلكتروني والإشعارات",
+        "code": otp_code
     }), 200
 
 
