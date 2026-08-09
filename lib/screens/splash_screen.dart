@@ -9,7 +9,6 @@ import '../widgets/radial_background.dart';
 import 'login_screen.dart';
 import 'admin/admin_dashboard.dart';
 import 'employee/employee_dashboard.dart';
-import 'products/products_screen.dart';
 import 'home/home_screen.dart';
 
 class SplashScreen extends StatefulWidget {

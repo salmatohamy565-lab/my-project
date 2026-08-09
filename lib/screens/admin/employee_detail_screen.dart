@@ -13,6 +13,7 @@ import '../../providers/user_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/radial_background.dart';
+import '../../utils/copy_utils.dart';
 
 class EmployeeDetailScreen extends StatefulWidget {
   final int userId;
@@ -146,7 +147,18 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(widget.username, style: AppStyles.titleLarge),
+                      InkWell(
+                        onTap: () => copyToClipboard(context, widget.username, label: 'اسم الموظف'),
+                        borderRadius: BorderRadius.circular(6.r),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(widget.username, style: AppStyles.titleLarge),
+                            SizedBox(width: 8.w),
+                            Icon(Icons.copy_rounded, size: 16.r, color: AppColors.primaryAccent),
+                          ],
+                        ),
+                      ),
                       SizedBox(height: 4.h),
                       Text('صفحة تفصيلية خاصة بالموظف (ID: ${widget.userId})', style: AppStyles.bodyMuted),
                     ],

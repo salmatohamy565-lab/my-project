@@ -39,8 +39,12 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 @app.before_request
 def handle_options_preflight():
     if request.method == 'OPTIONS':
-        response = make_response()
-        response.status_code = 200
+        origin = request.headers.get('Origin') or '*'
+        response = make_response('', 200)
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Cookie, X-Requested-With, Accept'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, PUT, POST, DELETE, OPTIONS'
         return response
 
 @app.after_request
@@ -1126,6 +1130,7 @@ def api_profile():
     if request.method in ['POST', 'PUT']:
         name = request.form.get('name') or (request.is_json and request.json and request.json.get('name'))
         phone = request.form.get('phone') or (request.is_json and request.json and request.json.get('phone'))
+        direct_photo_url = request.form.get('photo_url') or (request.is_json and request.json and request.json.get('photo_url'))
         photo_file = request.files.get('photo') or request.files.get('avatar') or request.files.get('file')
 
         if current_user:
@@ -1133,21 +1138,39 @@ def api_profile():
                 current_user.name = name
             if hasattr(current_user, 'phone') and phone:
                 current_user.phone = phone
+            if direct_photo_url and str(direct_photo_url).strip():
+                current_user.photo_url = str(direct_photo_url).strip()
 
             if photo_file:
                 try:
                     filename = secure_filename(photo_file.filename or f"avatar_{current_user.id}.jpg")
-                    safe_path = f"avatars/{current_user.id}_{int(time.time())}_{filename}"
+                    safe_filename = f"avatar_{current_user.id}_{int(time.time())}_{filename}"
                     photo_bytes = photo_file.read()
-                    
-                    public_url = storage_mgr.upload_file(
-                        bucket_name='user-uploads',
-                        file_path_in_bucket=safe_path,
-                        file_bytes=photo_bytes,
-                        content_type=photo_file.content_type or 'image/jpeg'
-                    )
-                    if public_url:
-                        current_user.photo_url = public_url
+
+                    # Always encode as base64 data URL for fallback image persistence
+                    import base64
+                    mime_type = photo_file.content_type or 'image/jpeg'
+                    b64_url = f"data:{mime_type};base64,{base64.b64encode(photo_bytes).decode('utf-8')}"
+                    current_user.photo_url = b64_url
+
+                    local_avatar_dir = os.path.join(app.static_folder, 'uploads', 'avatars')
+                    os.makedirs(local_avatar_dir, exist_ok=True)
+                    local_avatar_path = os.path.join(local_avatar_dir, safe_filename)
+                    with open(local_avatar_path, 'wb') as f:
+                        f.write(photo_bytes)
+
+                    if storage_mgr:
+                        try:
+                            public_url = storage_mgr.upload_file(
+                                bucket_name='user-uploads',
+                                file_path_in_bucket=f"avatars/{safe_filename}",
+                                file_bytes=photo_bytes,
+                                content_type=photo_file.content_type or 'image/jpeg'
+                            )
+                            if public_url and public_url.startswith('http'):
+                                current_user.photo_url = public_url
+                        except Exception as sub_e:
+                            print(f"[SUPABASE AVATAR UPLOAD WARNING] {sub_e}")
                 except Exception as e:
                     print(f"[PROFILE PHOTO UPLOAD ERROR] {e}")
 
@@ -1475,54 +1498,69 @@ def update_order_status(order_id):
     return jsonify(order.to_dict()), 200
 
 
+PROMO_NOTIFICATION_POOL = [
+    {
+        "title": "☕ خصم حصري 15% على المجات الحرارية والطباعة!",
+        "message": "صمم مجك الخاص بصورتك أو اسمك بأعلى جودة ألوان من Bola Designs الآن واحصل على خصم فوري!"
+    },
+    {
+        "title": "🚀 طور هوية مشروعك أو شركتك بأعلى مستوى!",
+        "message": "احصل على تصميم هوية بصرية كاملة، كروت شخصية، وإعلانات احترافية لجذب المزيد من العملاء."
+    },
+    {
+        "title": "🎁 هدايا ومناسبات سعيدة مخصصة لأطفالك!",
+        "message": "اكتشف أحدث تصاميم الطباعة المخصصة للأطفال والمناسبات الهامة واجعل لحظاتكم لا تُنسى!"
+    },
+    {
+        "title": "💎 عروض نقاط الولاء المُميّزة!",
+        "message": "جمع نقاطك مع كل طلب جديد واستبدلها بخصومات كاش مباشرة داخل السلة عند الشراء."
+    },
+    {
+        "title": "🔥 شحن سريع وتجهيز فورى لجميع الطلبات!",
+        "message": "فريق بولا ديزاينز جاهز لتنفيذ طلبك وتسليمه بأعلى دقة وسرعة التجهيز والتوصيل."
+    }
+]
+
+def ensure_15min_supabase_notification(user_id):
+    try:
+        latest = AppNotification.query.filter_by(user_id=user_id).order_by(AppNotification.created_at.desc()).first()
+        should_add = False
+        if not latest:
+            should_add = True
+        else:
+            time_diff = (datetime.now() - latest.created_at).total_seconds()
+            if time_diff >= 15 * 60:  # 15 minutes (900 seconds)
+                should_add = True
+
+        if should_add:
+            count = AppNotification.query.filter_by(user_id=user_id).count()
+            promo = PROMO_NOTIFICATION_POOL[count % len(PROMO_NOTIFICATION_POOL)]
+            new_notif = AppNotification(
+                user_id=user_id,
+                title=promo['title'],
+                message=promo['message'],
+                is_read=False,
+                created_at=datetime.now()
+            )
+            db.session.add(new_notif)
+            db.session.commit()
+            print(f"[SUPABASE NOTIFICATION] Inserted 15-min notification for user {user_id} into Supabase DB")
+    except Exception as e:
+        print(f"[SUPABASE NOTIFICATION ERROR] {e}")
+        db.session.rollback()
+
+
 @app.route('/api/notifications', methods=['GET'])
 def get_notifications():
     current_user = get_current_user()
     if not current_user:
         return jsonify([]), 200
 
-    user_notifs = AppNotification.query.filter_by(user_id=current_user.id).order_by(AppNotification.created_at.desc()).limit(20).all()
-    user_notifs_dicts = [n.to_dict() for n in user_notifs]
+    # Automatically generate 15-minute periodic notification into Supabase DB
+    ensure_15min_supabase_notification(current_user.id)
 
-    # Promotional / Marketing curated notifications to excite users
-    promo_notifications = [
-        {
-            "id": 9001,
-            "user_id": current_user.id,
-            "title": "☕ مش عايز تعمل مج خاص بصورتك أو اسمك؟",
-            "message": "صمم مجك الحراري المميز بألوانك المفضلة الآن وحافظ على مشروبك ساخناً بأعلى جودة من Bola Designs!",
-            "is_read": False,
-            "created_at": datetime.now().isoformat()
-        },
-        {
-            "id": 9002,
-            "user_id": current_user.id,
-            "title": "🎁 مش عايز تفاجئ أطفالك وهديتك جاهزة؟",
-            "message": "اكتشف أحدث التصاميم والطباعة المخصصة للأطفال والمناسبات السعيدة. اجعل لحظاتكم لا تُنسى!",
-            "is_read": False,
-            "created_at": datetime.now().isoformat()
-        },
-        {
-            "id": 9003,
-            "user_id": current_user.id,
-            "title": "🚀 طور هوية مشروعك أو شركتك بأعلى مستوى!",
-            "message": "احصل على تصميم هوية بصرية كاملة وإعلانات احترافية لجذب المزيد من العملاء لمشروعك.",
-            "is_read": False,
-            "created_at": datetime.now().isoformat()
-        },
-        {
-            "id": 9004,
-            "user_id": current_user.id,
-            "title": "💎 خصم خاص ومباشر بنقاط الولاء!",
-            "message": "جمع نقاطك مع كل طلب واستبدلها بخصم كاش داخل السلة عند الشراء.",
-            "is_read": False,
-            "created_at": datetime.now().isoformat()
-        }
-    ]
-
-    # Merge user order notifications first, followed by marketing promotions
-    combined = user_notifs_dicts + promo_notifications
-    return jsonify(combined), 200
+    user_notifs = AppNotification.query.filter_by(user_id=current_user.id).order_by(AppNotification.created_at.desc()).limit(30).all()
+    return jsonify([n.to_dict() for n in user_notifs]), 200
 
 
 @app.route('/api/notifications/broadcast', methods=['POST'])

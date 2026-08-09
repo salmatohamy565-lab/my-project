@@ -7,6 +7,8 @@ import '../constants/app_styles.dart';
 import '../providers/auth_provider.dart';
 import 'notifications_modal.dart';
 
+import '../utils/copy_utils.dart';
+
 /// Unified top bar used across all app screens.
 /// Shows the Bola Designs logo on the left and optional trailing widget on the right.
 class AppLogoBar extends StatelessWidget {
@@ -23,7 +25,6 @@ class AppLogoBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
     final currentUser = authProvider.currentUser;
-    final photoUrl = currentUser?.photoUrl;
 
     return Container(
       padding: EdgeInsets.fromLTRB(12.w, 0, 12.w, 0),
@@ -71,26 +72,41 @@ class AppLogoBar extends StatelessWidget {
                   ),
                   SizedBox(width: 4.w),
                   Flexible(
-                    child: Text(
-                      username!,
-                      style: AppStyles.labelBold,
-                      overflow: TextOverflow.ellipsis,
+                    child: InkWell(
+                      onTap: () => copyToClipboard(context, username!, label: 'اسم المستخدم'),
+                      borderRadius: BorderRadius.circular(6.r),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+                        child: Text(
+                          username!,
+                          style: AppStyles.labelBold,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ),
                   ),
                   SizedBox(width: 6.w),
-                  CircleAvatar(
-                    radius: 16.r,
-                    backgroundColor: AppColors.primaryAccent.withOpacity(0.08),
-                    backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
-                        ? NetworkImage(photoUrl.startsWith('http') ? photoUrl : '${authProvider.baseUrl}$photoUrl') as ImageProvider
-                        : null,
-                    child: (photoUrl == null || photoUrl.isEmpty)
-                        ? const Icon(
-                            Icons.person,
-                            color: AppColors.primaryAccent,
-                            size: 20,
-                          )
-                        : null,
+                  InkWell(
+                    onTap: () => copyToClipboard(context, username!, label: 'اسم المستخدم'),
+                    borderRadius: BorderRadius.circular(16.r),
+                    child: Builder(
+                      builder: (context) {
+                        final avatarImage = currentUser?.getProfileImageProvider(authProvider.baseUrl);
+                        return CircleAvatar(
+                          radius: 16.r,
+                          backgroundColor: AppColors.primaryAccent.withOpacity(0.08),
+                          backgroundImage: avatarImage,
+                          onBackgroundImageError: avatarImage != null ? (_, __) {} : null,
+                          child: avatarImage == null
+                              ? const Icon(
+                                  Icons.person,
+                                  color: AppColors.primaryAccent,
+                                  size: 20,
+                                )
+                              : null,
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),

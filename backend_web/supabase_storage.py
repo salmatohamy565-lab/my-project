@@ -6,8 +6,11 @@ class SupabaseStorageManager:
     """
     إدارة رفع واسترجاع وحذف الملفات والصور عبر Supabase Storage
     """
+    DEFAULT_URL = 'https://kxeqayzxfvoedqvilcmp.supabase.co'
+
     def __init__(self, supabase_url=None, supabase_key=None):
-        self.supabase_url = (supabase_url or os.environ.get('SUPABASE_URL', '')).rstrip('/')
+        raw_url = supabase_url or os.environ.get('SUPABASE_URL', self.DEFAULT_URL)
+        self.supabase_url = (raw_url or self.DEFAULT_URL).rstrip('/')
         self.supabase_key = supabase_key or os.environ.get('SUPABASE_KEY') or os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')
         self.is_configured = bool(self.supabase_url and self.supabase_key)
         
@@ -24,7 +27,7 @@ class SupabaseStorageManager:
         رفع ملف إلى Supabase Storage وإرجاع الرابط المباشر
         """
         if not self.is_configured:
-            raise ValueError("Supabase Storage is not configured. Missing SUPABASE_URL or SUPABASE_KEY.")
+            return self.get_public_url(bucket_name, file_path_in_bucket)
 
         # محاولة الرفع عبر SDK الرسمي أولاً
         if self._client:

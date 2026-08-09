@@ -98,42 +98,39 @@ class ApiService {
   }
 
   Future<void> _ensureWorkingBaseUrl() async {
-    final candidateUrls = [
-      'https://bola-designs-backend.onrender.com',
-      'http://127.0.0.1:5001',
-      'http://localhost:5001',
-      if (!kIsWeb && Platform.isAndroid) 'http://10.0.2.2:5001',
-    ];
-
-    try {
-      final pingDio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 3),
-        receiveTimeout: const Duration(seconds: 3),
-      ));
-      final res = await pingDio.get('$_baseUrl/health');
-      if (res.statusCode == 200) return;
-    } catch (_) {}
-
-    for (final url in candidateUrls) {
+    // 1. Try currently configured _baseUrl first (allows Render cold start up to 20s)
+    for (int attempt = 0; attempt < 2; attempt++) {
       try {
         final pingDio = Dio(BaseOptions(
-          connectTimeout: const Duration(seconds: 3),
-          receiveTimeout: const Duration(seconds: 3),
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 10),
         ));
-        final res = await pingDio.get('$url/health');
+        final res = await pingDio.get('$_baseUrl/health');
+        if (res.statusCode == 200) return;
+      } catch (_) {
+        if (attempt == 0) await Future.delayed(const Duration(seconds: 2));
+      }
+    }
+
+    // 2. Try primary production URL if _baseUrl was set to something else
+    if (_baseUrl != defaultBaseUrl) {
+      try {
+        final pingDio = Dio(BaseOptions(
+          connectTimeout: const Duration(seconds: 12),
+          receiveTimeout: const Duration(seconds: 12),
+        ));
+        final res = await pingDio.get('$defaultBaseUrl/health');
         if (res.statusCode == 200) {
-          _baseUrl = url;
+          _baseUrl = defaultBaseUrl;
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('api_base_url', _baseUrl);
-          print('[API SERVICE] Switched working baseUrl to: $_baseUrl');
           return;
         }
       } catch (_) {}
     }
 
-    if (kIsWeb) {
-      _baseUrl = 'http://127.0.0.1:5001';
-    }
+    // Default to production URL
+    _baseUrl = defaultBaseUrl;
   }
 
   // Auth APIs
@@ -275,6 +272,7 @@ class ApiService {
 
   // Profile APIs
   Future<Response> getProfile() async {
+    await _ensureWorkingBaseUrl();
     try {
       final response = await _dio.get('/profile');
       return response;
@@ -283,33 +281,41 @@ class ApiService {
     }
   }
 
-  Future<Response> updateProfile({String? name, String? phone, File? photo}) async {
+  Future<Response> updateProfile({
+    String? name,
+    String? phone,
+    File? photo,
+    Uint8List? photoBytes,
+    String? photoName,
+  }) async {
+    await _ensureWorkingBaseUrl();
     try {
-      if (photo == null || kIsWeb) {
-        final response = await _dio.post(
-          '/profile',
-          data: {
-            if (name != null) 'name': name,
-            if (phone != null) 'phone': phone,
-          },
+      final Map<String, dynamic> map = {};
+      if (name != null && name.trim().isNotEmpty) map['name'] = name.trim();
+      if (phone != null && phone.trim().isNotEmpty) map['phone'] = phone.trim();
+
+      if (photoBytes != null && photoBytes.isNotEmpty) {
+        map['photo'] = MultipartFile.fromBytes(
+          photoBytes,
+          filename: photoName ?? 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg',
         );
-        return response;
+      } else if (photo != null && !kIsWeb && photo.path.isNotEmpty) {
+        final fileName = photo.path.split(photo.path.contains('\\') ? '\\' : '/').last;
+        map['photo'] = await MultipartFile.fromFile(photo.path, filename: fileName);
       }
 
-      final Map<String, dynamic> map = {};
-      if (name != null) map['name'] = name;
-      if (phone != null) map['phone'] = phone;
-
-      final fileName = photo.path.split(photo.path.contains('\\') ? '\\' : '/').last;
-      map['photo'] = await MultipartFile.fromFile(photo.path, filename: fileName);
-
-      final formData = FormData.fromMap(map);
-      final response = await _dio.post(
-        '/profile',
-        data: formData,
-        options: Options(contentType: 'multipart/form-data'),
-      );
-      return response;
+      if (map.containsKey('photo')) {
+        final formData = FormData.fromMap(map);
+        final response = await _dio.post(
+          '/profile',
+          data: formData,
+          options: Options(contentType: 'multipart/form-data'),
+        );
+        return response;
+      } else {
+        final response = await _dio.post('/profile', data: map);
+        return response;
+      }
     } on DioException catch (e) {
       throw _handleError(e);
     }
@@ -317,6 +323,7 @@ class ApiService {
 
   // Orders APIs
   Future<Response> getOrders({String? status}) async {
+    await _ensureWorkingBaseUrl();
     try {
       final response = await _dio.get(
         '/orders',
@@ -337,7 +344,9 @@ class ApiService {
     Uint8List? paymentProofBytes,
     String? paymentProofName,
   }) async {
-    try {
+    await _ensureWorkingBaseUrl();
+
+    Future<Response> doPost() async {
       final Map<String, dynamic> dataMap = {
         'product_ids': productIds.toString(),
         'items_summary': itemsSummary,
@@ -355,14 +364,34 @@ class ApiService {
         dataMap['payment_proof'] = await MultipartFile.fromFile(paymentProof.path, filename: fileName);
       }
 
-      final formData = FormData.fromMap(dataMap);
-      final response = await _dio.post(
-        '/orders',
-        data: formData,
-        options: Options(contentType: 'multipart/form-data'),
-      );
-      return response;
+      if (dataMap.containsKey('payment_proof')) {
+        final formData = FormData.fromMap(dataMap);
+        return await _dio.post(
+          '/orders',
+          data: formData,
+          options: Options(contentType: 'multipart/form-data'),
+        );
+      } else {
+        return await _dio.post('/orders', data: dataMap);
+      }
+    }
+
+    try {
+      return await doPost();
     } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
+        await Future.delayed(const Duration(seconds: 2));
+        try {
+          return await doPost();
+        } catch (retryErr) {
+          if (retryErr is DioException) {
+            throw _handleError(retryErr);
+          }
+        }
+      }
       throw _handleError(e);
     }
   }

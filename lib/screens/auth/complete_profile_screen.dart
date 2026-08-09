@@ -1,17 +1,17 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
-import 'package:file_picker/file_picker.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_styles.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/radial_background.dart';
 import '../../widgets/animations.dart';
 import '../../widgets/app_logo_bar.dart';
+import '../../utils/web_file_picker.dart';
 import '../admin/admin_dashboard.dart';
 import '../employee/employee_dashboard.dart';
-import '../products/products_screen.dart';
 import '../home/home_screen.dart';
 
 class CompleteProfileScreen extends StatefulWidget {
@@ -26,6 +26,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
   File? _profilePhoto;
+  Uint8List? _profilePhotoBytes;
+  String? _profilePhotoName;
 
   @override
   void initState() {
@@ -33,7 +35,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     final user = context.read<AuthProvider>().currentUser;
     final initialName = (user?.name != null && user!.name!.isNotEmpty)
         ? user.name!
-        : ((user?.username != null && user!.username!.isNotEmpty) ? user!.username! : 'salma');
+        : (user != null && user.username.isNotEmpty ? user.username : 'salma');
     final initialPhone = (user?.phone != null && user!.phone!.isNotEmpty)
         ? user.phone!
         : '01271122860';
@@ -50,13 +52,12 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   }
 
   void _pickPhoto() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: false,
-    );
-    if (result != null && result.files.single.path != null) {
+    final picked = await pickImageFile();
+    if (picked != null) {
       setState(() {
-        _profilePhoto = File(result.files.single.path!);
+        _profilePhotoBytes = picked.bytes;
+        _profilePhotoName = picked.name;
+        _profilePhoto = picked.file;
       });
     }
   }
@@ -70,7 +71,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         name: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
         photo: _profilePhoto,
-      ).timeout(const Duration(seconds: 2));
+        photoBytes: _profilePhotoBytes,
+        photoName: _profilePhotoName,
+      );
     } catch (_) {}
 
     if (mounted) {
@@ -133,31 +136,39 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
                           // Avatar Picker
                           Center(
-                            child: Stack(
-                              children: [
-                                CircleAvatar(
-                                  radius: 46.r,
-                                  backgroundColor: AppColors.primaryAccent.withOpacity(0.12),
-                                  backgroundImage: _profilePhoto != null
-                                      ? FileImage(_profilePhoto!) as ImageProvider
-                                      : null,
-                                  child: _profilePhoto == null
-                                      ? const Icon(Icons.person, size: 48, color: AppColors.primaryAccent)
-                                      : null,
-                                ),
-                                Positioned(
-                                  bottom: 0,
-                                  right: 0,
-                                  child: GestureDetector(
-                                    onTap: _pickPhoto,
+                            child: GestureDetector(
+                              onTap: _pickPhoto,
+                              child: Stack(
+                                children: [
+                                  Builder(
+                                    builder: (context) {
+                                      final completeAvatarImg = _profilePhotoBytes != null
+                                          ? MemoryImage(_profilePhotoBytes!) as ImageProvider
+                                          : (_profilePhoto != null
+                                              ? FileImage(_profilePhoto!) as ImageProvider
+                                              : authProvider.currentUser?.getProfileImageProvider(authProvider.baseUrl));
+                                      return CircleAvatar(
+                                        radius: 46.r,
+                                        backgroundColor: AppColors.primaryAccent.withOpacity(0.12),
+                                        backgroundImage: completeAvatarImg,
+                                        onBackgroundImageError: completeAvatarImg != null ? (_, __) {} : null,
+                                        child: completeAvatarImg == null
+                                            ? const Icon(Icons.person, size: 48, color: AppColors.primaryAccent)
+                                            : null,
+                                      );
+                                    },
+                                  ),
+                                  Positioned(
+                                    bottom: 0,
+                                    right: 0,
                                     child: CircleAvatar(
                                       radius: 16.r,
                                       backgroundColor: AppColors.primaryAccent,
                                       child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                           SizedBox(height: 24.h),

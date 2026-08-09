@@ -18,6 +18,7 @@ import 'admin_orders_screen.dart';
 import 'archived_tasks_screen.dart';
 import 'archived_files_screen.dart';
 import 'admin_files_screen.dart';
+import '../../utils/copy_utils.dart';
 import '../products/products_screen.dart';
 import '../employee/employee_dashboard.dart';
 
@@ -827,7 +828,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(u.username, style: AppStyles.labelBold),
+                InkWell(
+                  onTap: () => copyToClipboard(context, u.username, label: 'اسم المستخدم'),
+                  borderRadius: BorderRadius.circular(4.r),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(u.username, style: AppStyles.labelBold),
+                      SizedBox(width: 4.w),
+                      Icon(Icons.copy_rounded, size: 12.r, color: AppColors.primaryAccent),
+                    ],
+                  ),
+                ),
                 Text('ID: ${u.id}', style: AppStyles.bodyMuted),
               ],
             ),

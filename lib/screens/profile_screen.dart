@@ -1,9 +1,8 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
+import 'package:flutter/foundation.dart' show Uint8List;
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
-import 'package:file_picker/file_picker.dart';
 import '../utils/web_file_picker.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_styles.dart';
@@ -16,6 +15,7 @@ import '../widgets/payment_methods_modal.dart';
 import 'login_screen.dart';
 import 'admin/archived_tasks_screen.dart';
 import 'admin/archived_files_screen.dart';
+import '../utils/copy_utils.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -337,21 +337,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             });
                           }
                         },
-                        child: CircleAvatar(
-                          radius: 40.r,
-                          backgroundColor: AppColors.primaryAccent.withOpacity(0.1),
-                          backgroundImage: selectedPhotoBytes != null
-                              ? MemoryImage(selectedPhotoBytes!) as ImageProvider
-                              : (selectedPhoto != null
-                                  ? FileImage(selectedPhoto!) as ImageProvider
-                                  : (user?.photoUrl != null && user!.photoUrl!.isNotEmpty
-                                      ? NetworkImage(user.photoUrl!.startsWith('http')
-                                          ? user.photoUrl!
-                                          : '${authProvider.baseUrl}${user.photoUrl}') as ImageProvider
-                                      : null)),
-                          child: (selectedPhotoBytes == null && selectedPhoto == null && (user?.photoUrl == null || user!.photoUrl!.isEmpty))
-                              ? const Icon(Icons.camera_alt, color: AppColors.primaryAccent)
-                              : null,
+                        child: Builder(
+                          builder: (context) {
+                            final editAvatarImg = selectedPhotoBytes != null
+                                ? MemoryImage(selectedPhotoBytes!) as ImageProvider
+                                : (selectedPhoto != null
+                                    ? FileImage(selectedPhoto!) as ImageProvider
+                                    : user?.getProfileImageProvider(authProvider.baseUrl));
+                            return CircleAvatar(
+                              radius: 40.r,
+                              backgroundColor: AppColors.primaryAccent.withOpacity(0.1),
+                              backgroundImage: editAvatarImg,
+                              onBackgroundImageError: editAvatarImg != null ? (_, __) {} : null,
+                              child: editAvatarImg == null
+                                  ? const Icon(Icons.camera_alt, color: AppColors.primaryAccent)
+                                  : null,
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -450,34 +452,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         children: [
                           Row(
                             children: [
-                              CircleAvatar(
-                                radius: 36.r,
-                                backgroundColor: AppColors.primaryAccent.withOpacity(0.08),
-                                backgroundImage: (currentUser?.photoUrl != null && currentUser!.photoUrl!.isNotEmpty)
-                                    ? NetworkImage(currentUser.photoUrl!.startsWith('http')
-                                        ? currentUser.photoUrl!
-                                        : '${authProvider.baseUrl}${currentUser.photoUrl}') as ImageProvider
-                                    : null,
-                                child: (currentUser?.photoUrl == null || currentUser!.photoUrl!.isEmpty)
-                                    ? Icon(Icons.person_rounded, size: 40.r, color: AppColors.primaryAccent)
-                                    : null,
+                              Builder(
+                                builder: (context) {
+                                  final mainAvatarImg = currentUser?.getProfileImageProvider(authProvider.baseUrl);
+                                  return CircleAvatar(
+                                    radius: 36.r,
+                                    backgroundColor: AppColors.primaryAccent.withOpacity(0.08),
+                                    backgroundImage: mainAvatarImg,
+                                    onBackgroundImageError: mainAvatarImg != null ? (_, __) {} : null,
+                                    child: mainAvatarImg == null
+                                        ? Icon(Icons.person_rounded, size: 40.r, color: AppColors.primaryAccent)
+                                        : null,
+                                  );
+                                },
                               ),
                               SizedBox(width: 14.w),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      currentUser?.displayName ?? 'سلمى تهامي',
-                                      style: AppStyles.titleMedium.copyWith(fontSize: 18.sp),
+                                    InkWell(
+                                      onTap: () {
+                                        final txt = currentUser?.displayName ?? 'سلمى تهامي';
+                                        copyToClipboard(context, txt, label: 'اسم المستخدم');
+                                      },
+                                      borderRadius: BorderRadius.circular(6.r),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              currentUser?.displayName ?? 'سلمى تهامي',
+                                              style: AppStyles.titleMedium.copyWith(fontSize: 18.sp),
+                                            ),
+                                          ),
+                                          SizedBox(width: 6.w),
+                                          Icon(Icons.copy_rounded, size: 14.r, color: AppColors.primaryAccent),
+                                        ],
+                                      ),
                                     ),
                                     if (currentUser?.email != null && currentUser!.email!.isNotEmpty) ...[
-                                      SizedBox(height: 2.h),
-                                      Text(currentUser.email!, style: AppStyles.bodyMuted),
+                                      SizedBox(height: 4.h),
+                                      InkWell(
+                                        onTap: () => copyToClipboard(context, currentUser!.email!, label: 'البريد الإلكتروني'),
+                                        borderRadius: BorderRadius.circular(6.r),
+                                        child: Text(currentUser.email!, style: AppStyles.bodyMuted),
+                                      ),
                                     ],
                                     if (currentUser?.phone != null && currentUser!.phone!.isNotEmpty) ...[
-                                      SizedBox(height: 2.h),
-                                      Text(currentUser.phone!, style: AppStyles.bodyMuted),
+                                      SizedBox(height: 4.h),
+                                      InkWell(
+                                        onTap: () => copyToClipboard(context, currentUser!.phone!, label: 'رقم الهاتف'),
+                                        borderRadius: BorderRadius.circular(6.r),
+                                        child: Text(currentUser.phone!, style: AppStyles.bodyMuted),
+                                      ),
                                     ],
                                   ],
                                 ),

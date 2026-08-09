@@ -337,10 +337,12 @@ class CartScreen extends StatelessWidget {
                         }
                       } catch (e) {
                         if (context.mounted) {
+                          final cleanMsg = e.toString().replaceFirst('Exception: ', '').replaceFirst('Exception', '').trim();
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('حدث خطأ أثناء إرسال الطلب: $e'),
+                              content: Text('تنبيه: $cleanMsg'),
                               backgroundColor: AppColors.dangerStart,
+                              duration: const Duration(seconds: 4),
                             ),
                           );
                         }

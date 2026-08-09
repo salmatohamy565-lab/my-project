@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../constants/app_colors.dart';
@@ -25,11 +26,22 @@ class _NotificationsModalState extends State<NotificationsModal> {
   final ApiService _apiService = ApiService();
   List<NotificationModel> _notifications = [];
   bool _isLoading = true;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _fetchNotifications();
+    // Auto refresh notifications from Supabase DB every 15 minutes
+    _refreshTimer = Timer.periodic(const Duration(minutes: 15), (_) {
+      _fetchNotifications();
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchNotifications() async {
@@ -93,95 +105,103 @@ class _NotificationsModalState extends State<NotificationsModal> {
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _notifications.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.notifications_none_rounded, size: 54.sp, color: AppColors.textMuted),
-                            SizedBox(height: 12.h),
-                            Text('لا توجد إشعارات جديدة حالياً', style: AppStyles.bodyMuted),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: _notifications.length,
-                        itemBuilder: (ctx, idx) {
-                          final notif = _notifications[idx];
-                          final isAccept = notif.message.contains('تمت الموافقة');
-                          final isReject = notif.message.contains('تم رفض');
-
-                          return Container(
-                            margin: EdgeInsets.only(bottom: 12.h),
-                            padding: EdgeInsets.all(14.w),
-                            decoration: BoxDecoration(
-                              color: isAccept
-                                  ? AppColors.emeraldGreen.withOpacity(0.06)
-                                  : isReject
-                                      ? AppColors.dangerStart.withOpacity(0.06)
-                                      : AppColors.inputBg,
-                              borderRadius: BorderRadius.circular(16.r),
-                              border: Border.all(
-                                color: isAccept
-                                    ? AppColors.emeraldGreen.withOpacity(0.3)
-                                    : isReject
-                                        ? AppColors.dangerStart.withOpacity(0.3)
-                                        : AppColors.borderLight,
+                : RefreshIndicator(
+                    onRefresh: _fetchNotifications,
+                    child: _notifications.isEmpty
+                        ? ListView(
+                            children: [
+                              SizedBox(height: 60.h),
+                              Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.notifications_none_rounded, size: 54.sp, color: AppColors.textMuted),
+                                    SizedBox(height: 12.h),
+                                    Text('لا توجد إشعارات جديدة حالياً', style: AppStyles.bodyMuted),
+                                  ],
+                                ),
                               ),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                CircleAvatar(
-                                  radius: 18.r,
-                                  backgroundColor: isAccept
-                                      ? AppColors.emeraldGreen.withOpacity(0.15)
+                            ],
+                          )
+                        : ListView.builder(
+                            itemCount: _notifications.length,
+                            itemBuilder: (ctx, idx) {
+                              final notif = _notifications[idx];
+                              final isAccept = notif.message.contains('تمت الموافقة');
+                              final isReject = notif.message.contains('تم رفض');
+
+                              return Container(
+                                margin: EdgeInsets.only(bottom: 12.h),
+                                padding: EdgeInsets.all(14.w),
+                                decoration: BoxDecoration(
+                                  color: isAccept
+                                      ? AppColors.emeraldGreen.withOpacity(0.06)
                                       : isReject
-                                          ? AppColors.dangerStart.withOpacity(0.15)
-                                          : AppColors.primaryAccent.withOpacity(0.15),
-                                  child: Icon(
-                                    isAccept
-                                        ? Icons.check_circle_rounded
-                                        : isReject
-                                            ? Icons.cancel_rounded
-                                            : Icons.info_rounded,
+                                          ? AppColors.dangerStart.withOpacity(0.06)
+                                          : AppColors.inputBg,
+                                  borderRadius: BorderRadius.circular(16.r),
+                                  border: Border.all(
                                     color: isAccept
-                                        ? AppColors.emeraldGreen
+                                        ? AppColors.emeraldGreen.withOpacity(0.3)
                                         : isReject
-                                            ? AppColors.dangerStart
-                                            : AppColors.primaryAccent,
-                                    size: 20.r,
+                                            ? AppColors.dangerStart.withOpacity(0.3)
+                                            : AppColors.borderLight,
                                   ),
                                 ),
-                                SizedBox(width: 12.w),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        notif.title,
-                                        style: AppStyles.labelBold.copyWith(fontSize: 14.sp),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 18.r,
+                                      backgroundColor: isAccept
+                                          ? AppColors.emeraldGreen.withOpacity(0.15)
+                                          : isReject
+                                              ? AppColors.dangerStart.withOpacity(0.15)
+                                              : AppColors.primaryAccent.withOpacity(0.15),
+                                      child: Icon(
+                                        isAccept
+                                            ? Icons.check_circle_rounded
+                                            : isReject
+                                                ? Icons.cancel_rounded
+                                                : Icons.info_rounded,
+                                        color: isAccept
+                                            ? AppColors.emeraldGreen
+                                            : isReject
+                                                ? AppColors.dangerStart
+                                                : AppColors.primaryAccent,
+                                        size: 20.r,
                                       ),
-                                      SizedBox(height: 4.h),
-                                      Text(
-                                        notif.message,
-                                        style: AppStyles.bodyDefault.copyWith(fontSize: 12.sp),
+                                    ),
+                                    SizedBox(width: 12.w),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            notif.title,
+                                            style: AppStyles.labelBold.copyWith(fontSize: 14.sp),
+                                          ),
+                                          SizedBox(height: 4.h),
+                                          Text(
+                                            notif.message,
+                                            style: AppStyles.bodyDefault.copyWith(fontSize: 12.sp),
+                                          ),
+                                          if (notif.createdAt != null) ...[
+                                            SizedBox(height: 6.h),
+                                            Text(
+                                              '${notif.createdAt!.hour}:${notif.createdAt!.minute.toString().padLeft(2, '0')}',
+                                              style: AppStyles.bodyMuted.copyWith(fontSize: 10.sp),
+                                            ),
+                                          ],
+                                        ],
                                       ),
-                                      if (notif.createdAt != null) ...[
-                                        SizedBox(height: 6.h),
-                                        Text(
-                                          '${notif.createdAt!.hour}:${notif.createdAt!.minute.toString().padLeft(2, '0')}',
-                                          style: AppStyles.bodyMuted.copyWith(fontSize: 10.sp),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+                              );
+                            },
+                          ),
+                  ),
           ),
         ],
       ),
