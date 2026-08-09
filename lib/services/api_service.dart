@@ -98,12 +98,11 @@ class ApiService {
   }
 
   Future<void> _ensureWorkingBaseUrl() async {
-    // 1. Try currently configured _baseUrl first (allows Render cold start up to 20s)
     for (int attempt = 0; attempt < 2; attempt++) {
       try {
         final pingDio = Dio(BaseOptions(
-          connectTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 10),
+          connectTimeout: const Duration(seconds: 25),
+          receiveTimeout: const Duration(seconds: 25),
         ));
         final res = await pingDio.get('$_baseUrl/health');
         if (res.statusCode == 200) return;
@@ -111,25 +110,6 @@ class ApiService {
         if (attempt == 0) await Future.delayed(const Duration(seconds: 2));
       }
     }
-
-    // 2. Try primary production URL if _baseUrl was set to something else
-    if (_baseUrl != defaultBaseUrl) {
-      try {
-        final pingDio = Dio(BaseOptions(
-          connectTimeout: const Duration(seconds: 12),
-          receiveTimeout: const Duration(seconds: 12),
-        ));
-        final res = await pingDio.get('$defaultBaseUrl/health');
-        if (res.statusCode == 200) {
-          _baseUrl = defaultBaseUrl;
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('api_base_url', _baseUrl);
-          return;
-        }
-      } catch (_) {}
-    }
-
-    // Default to production URL
     _baseUrl = defaultBaseUrl;
   }
 
@@ -383,12 +363,14 @@ class ApiService {
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.sendTimeout ||
           e.type == DioExceptionType.receiveTimeout) {
-        await Future.delayed(const Duration(seconds: 2));
-        try {
-          return await doPost();
-        } catch (retryErr) {
-          if (retryErr is DioException) {
-            throw _handleError(retryErr);
+        for (int retry = 0; retry < 3; retry++) {
+          await Future.delayed(Duration(seconds: 2 * (retry + 1)));
+          try {
+            return await doPost();
+          } catch (retryErr) {
+            if (retry == 2 && retryErr is DioException) {
+              throw _handleError(retryErr);
+            }
           }
         }
       }
