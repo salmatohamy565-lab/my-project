@@ -63,12 +63,10 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
         }
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(code != 'OK'
-              ? '✓ تم إرسال كود الاستعادة لبريدك! (كود التعيين للاختبار: $code)'
-              : '✓ تم إرسال كود الاستعادة بنجاح إلى بريدك الإلكتروني! يرجى فحص البريد (Inbox / Spam).'),
+        const SnackBar(
+          content: Text('✓ تم إرسال كود الاستعادة بنجاح إلى بريدك الإلكتروني! يرجى فحص البريد (Inbox / Spam).'),
           backgroundColor: AppColors.emeraldGreen,
-          duration: const Duration(seconds: 6),
+          duration: Duration(seconds: 5),
         ),
       );
     } else if (mounted) {
