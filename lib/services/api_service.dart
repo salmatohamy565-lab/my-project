@@ -712,16 +712,16 @@ class ApiService {
         error.type == DioExceptionType.sendTimeout) {
       message = 'انتهت مهلة الاتصال بالخادم، يرجى التحقق من الشبكة';
     } else if (error.type == DioExceptionType.connectionError) {
-      message = 'فشل الاتصال بالخادم، تأكد أن IP الخادم صحيح والخادم يعمل';
+      message = 'عفواً، جاري الاتصال بالخادم، يرجى المحاولة مرة أخرى بعد لحظات';
     } else if (error.type == DioExceptionType.badResponse) {
       final responseData = error.response?.data;
       if (responseData is Map && responseData.containsKey('error') && responseData['error'] != null) {
         message = responseData['error'].toString();
       } else {
-        message = 'بيانات الدخول غير صحيحة أو خطأ من الخادم (${error.response?.statusCode ?? 500})';
+        message = 'حدث خطأ من الخادم (${error.response?.statusCode ?? 500})، يرجى المحاولة لاحقاً';
       }
     } else if (error.error is SocketException) {
-      message = 'فشل الاتصال بالخادم، تأكد أن العنوان صحيح والخادم يعمل';
+      message = 'يرجى التحقق من اتصال الانترنت والمحاولة مرة أخرى';
     } else if (error.message != null && error.message!.trim().isNotEmpty) {
       message = error.message!;
     }

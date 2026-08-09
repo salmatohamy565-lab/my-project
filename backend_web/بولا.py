@@ -802,22 +802,22 @@ def register():
     else:
         email = f"{username.lower()}@gmail.com"
 
-    existing = User.query.filter(
-        or_(
-            db.func.lower(User.username) == db.func.lower(username),
-            db.func.lower(User.email) == db.func.lower(email)
-        )
-    ).first()
-
-    if existing:
-        if existing.check_password(password):
-            session['user_id'] = existing.id
+    existing_email_user = User.query.filter(db.func.lower(User.email) == db.func.lower(email)).first()
+    if existing_email_user:
+        if existing_email_user.check_password(password):
+            session['user_id'] = existing_email_user.id
             if data.get('remember'):
                 session.permanent = True
-            record_login_attendance(existing.id)
-            return jsonify({"message": "تم تسجيل الدخول بحسابك الحالي", "user": existing.to_dict()}), 200
+            record_login_attendance(existing_email_user.id)
+            return jsonify({"message": "تم تسجيل الدخول بحسابك الحالي", "user": existing_email_user.to_dict(), "token": str(existing_email_user.id)}), 200
         else:
-            return jsonify({"error": "اسم المستخدم أو البريد الإلكتروني موجود بالفعل"}), 409
+            return jsonify({"error": "البريد الإلكتروني مسجل بالفعل لمستخدم آخر"}), 409
+
+    base_username = username
+    counter = 1
+    while User.query.filter(db.func.lower(User.username) == db.func.lower(username)).first():
+        username = f"{base_username}{counter}"
+        counter += 1
 
     user = User(
         username=username,
