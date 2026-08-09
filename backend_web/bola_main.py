@@ -1432,10 +1432,22 @@ def api_orders():
         if proof_file and proof_file.filename:
             filename = f"proof_{current_user.id}_{int(time.time())}_{secure_filename(proof_file.filename)}"
             dest = os.path.join(app.config['PAYMENT_PROOF_FOLDER'], filename)
-            proof_file.save(dest)
+            proof_bytes = proof_file.read()
+            with open(dest, 'wb') as f:
+                f.write(proof_bytes)
             proof_filename = filename
             if storage_mgr and storage_mgr.is_configured:
-                storage_mgr.upload_file('payment-proofs', filename, dest)
+                try:
+                    pub_url = storage_mgr.upload_file(
+                        bucket_name='payment-proofs',
+                        file_path_in_bucket=filename,
+                        file_bytes=proof_bytes,
+                        content_type=proof_file.content_type or 'image/jpeg'
+                    )
+                    if pub_url and pub_url.startswith('http'):
+                        proof_filename = pub_url
+                except Exception as e:
+                    print(f"[SUPABASE PROOF UPLOAD ERROR] {e}")
 
         new_order = Order(
             user_id=current_user.id,
