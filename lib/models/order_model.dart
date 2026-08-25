@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'product_model.dart';
 
 class OrderModel {
@@ -12,6 +13,7 @@ class OrderModel {
   final double totalPrice;
   final String? paymentMethod;
   final String? paymentProofUrl;
+  final String? customerAddress;
   final String? rejectionReason;
   final DateTime? createdAt;
 
@@ -27,6 +29,7 @@ class OrderModel {
     required this.totalPrice,
     this.paymentMethod,
     this.paymentProofUrl,
+    this.customerAddress,
     this.rejectionReason,
     this.createdAt,
   });
@@ -34,7 +37,8 @@ class OrderModel {
   String get statusArabic {
     switch (status.toLowerCase()) {
       case 'pending':
-        return 'قيد الانتظار';
+      case 'pending_approval':
+        return 'قيد الموافقة';
       case 'approved':
         return 'تمت الموافقة';
       case 'preparing':
@@ -54,38 +58,96 @@ class OrderModel {
 
   String? getFullPaymentProofUrl(String baseUrl) {
     if (paymentProofUrl == null || paymentProofUrl!.trim().isEmpty) return null;
-    if (paymentProofUrl!.startsWith('http://') || paymentProofUrl!.startsWith('https://')) {
-      return paymentProofUrl;
+    final url = paymentProofUrl!.trim();
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image') || url.contains('data:image')) {
+      return url;
+    }
+    if (url.startsWith('proof_') || (!url.contains('/') && url.contains('.'))) {
+      return 'https://kxeqayzxfvoedqvilcmp.supabase.co/storage/v1/object/public/payment-proofs/$url';
     }
     String cleanBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
-    String cleanPath = paymentProofUrl!.startsWith('/') ? paymentProofUrl! : '/$paymentProofUrl';
+    String cleanPath = url.startsWith('/') ? url : '/$url';
     return '$cleanBase$cleanPath';
   }
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
-    var rawProducts = json['products'] as List? ?? [];
-    List<ProductModel> prodList = rawProducts
-        .map((p) => ProductModel.fromJson(p as Map<String, dynamic>))
+    var rawProducts = json['products'] ?? json['items_json'];
+    List<dynamic> productListRaw = [];
+    if (rawProducts is List) {
+      productListRaw = rawProducts;
+    } else if (rawProducts is String && rawProducts.trim().startsWith('[')) {
+      try {
+        productListRaw = jsonDecode(rawProducts);
+      } catch (_) {}
+    }
+
+    List<ProductModel> prodList = productListRaw
+        .whereType<Map<String, dynamic>>()
+        .map((p) => ProductModel.fromJson(p))
         .toList();
 
+    int parsedUserId = 0;
+    if (json['user_id'] != null) {
+      if (json['user_id'] is int) {
+        parsedUserId = json['user_id'];
+      } else {
+        parsedUserId = int.tryParse(json['user_id'].toString()) ?? 0;
+      }
+    }
+
+    String custName = json['user_name']?.toString() ?? json['customer_name']?.toString() ?? '';
+    String custPhone = json['user_phone']?.toString() ?? json['customer_phone']?.toString() ?? json['sender_info']?.toString() ?? '';
+
+    String? parsedProof = (json['payment_proof_url'] ??
+            json['payment_proof'] ??
+            json['payment_proof_filename'] ??
+            json['proof_url'] ??
+            json['receipt_url'] ??
+            json['receipt'] ??
+            json['payment_receipt'])
+        ?.toString();
+
+    String? parsedAddress = (json['customer_address'] ??
+            json['address'] ??
+            json['delivery_address'] ??
+            json['location'])
+        ?.toString();
+
+    double parsedPrice = 0.0;
+    if (json['total_price'] != null) {
+      if (json['total_price'] is num) {
+        parsedPrice = (json['total_price'] as num).toDouble();
+      } else {
+        parsedPrice = double.tryParse(json['total_price'].toString()) ?? 0.0;
+      }
+    } else if (json['total'] != null) {
+      if (json['total'] is num) {
+        parsedPrice = (json['total'] as num).toDouble();
+      } else {
+        parsedPrice = double.tryParse(json['total'].toString()) ?? 0.0;
+      }
+    }
+
     return OrderModel(
-      id: json['id'] is int ? json['id'] : int.parse(json['id'].toString()),
-      userId: json['user_id'] is int ? json['user_id'] : int.parse(json['user_id'].toString()),
-      customerName: json['customer_name']?.toString() ?? '',
-      customerPhone: json['customer_phone']?.toString() ?? '',
+      id: json['id'] is int ? json['id'] : (int.tryParse(json['id']?.toString() ?? '') ?? 0),
+      userId: parsedUserId,
+      customerName: custName.isNotEmpty ? custName : 'عميل',
+      customerPhone: custPhone,
       productIds: json['product_ids']?.toString() ?? '',
       itemsSummary: json['items_summary']?.toString() ?? '',
       products: prodList,
       status: json['status']?.toString() ?? 'pending',
-      totalPrice: (json['total_price'] as num?)?.toDouble() ?? 0.0,
+      totalPrice: parsedPrice,
       paymentMethod: json['payment_method']?.toString(),
-      paymentProofUrl: json['payment_proof_url']?.toString(),
+      paymentProofUrl: parsedProof,
+      customerAddress: parsedAddress,
       rejectionReason: json['rejection_reason']?.toString(),
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString())
           : null,
     );
   }
+
 
   Map<String, dynamic> toJson() {
     return {
@@ -99,6 +161,7 @@ class OrderModel {
       'total_price': totalPrice,
       'payment_method': paymentMethod,
       'payment_proof_url': paymentProofUrl,
+      'customer_address': customerAddress,
       'rejection_reason': rejectionReason,
       'created_at': createdAt?.toIso8601String(),
     };

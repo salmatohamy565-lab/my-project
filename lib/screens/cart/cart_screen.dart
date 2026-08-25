@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart' show Uint8List;
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
@@ -5,12 +7,17 @@ import '../../constants/app_colors.dart';
 import '../../constants/app_styles.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cart_provider.dart';
+import '../../providers/order_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/app_logo_bar.dart';
 import '../../widgets/custom_bottom_nav_bar.dart';
 import '../../widgets/payment_methods_modal.dart';
 import '../../widgets/radial_background.dart';
+import '../../widgets/product_details_modal.dart';
+import '../../widgets/product_image_widget.dart';
+import '../../models/order_model.dart';
 import '../home/home_screen.dart';
+import '../profile_screen.dart';
 
 class CartScreen extends StatelessWidget {
   const CartScreen({super.key});
@@ -95,7 +102,6 @@ class CartScreen extends StatelessWidget {
                         final product = item.product;
 
                         return Container(
-                          padding: EdgeInsets.all(12.w),
                           decoration: BoxDecoration(
                             color: AppColors.cardBg,
                             borderRadius: BorderRadius.circular(16.r),
@@ -108,69 +114,99 @@ class CartScreen extends StatelessWidget {
                               ),
                             ],
                           ),
-                          child: Row(
-                            children: [
-                              // Product Thumbnail
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12.r),
-                                child: SizedBox(
-                                  width: 64.w,
-                                  height: 64.w,
-                                  child: product.imageUrl != null
-                                      ? Image.network(
-                                          product.getFullImageUrl(ApiService().baseUrl)!,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => _buildThumbPlaceholder(),
-                                        )
-                                      : _buildThumbPlaceholder(),
-                                ),
-                              ),
-                              SizedBox(width: 12.w),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () => ProductDetailsModal.show(context, product),
+                              borderRadius: BorderRadius.circular(16.r),
+                              child: Padding(
+                                padding: EdgeInsets.all(12.w),
+                                child: Row(
                                   children: [
-                                    Text(
-                                      product.name,
-                                      style: AppStyles.labelBold.copyWith(fontSize: 14.sp),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                    // Product Thumbnail using ProductImageWidget
+                                    ProductImageWidget(
+                                      imageUrl: product.imageUrl,
+                                      baseUrl: authProvider.baseUrl,
+                                      width: 64.w,
+                                      height: 64.w,
+                                      borderRadius: BorderRadius.circular(12.r),
                                     ),
-                                    SizedBox(height: 4.h),
-                                    Text(
-                                      '${product.price.toStringAsFixed(0)} ج.م',
-                                      style: TextStyle(
-                                        color: AppColors.primaryAccent,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13.sp,
+                                    SizedBox(width: 12.w),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            product.name,
+                                            style: AppStyles.labelBold.copyWith(fontSize: 14.sp),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          SizedBox(height: 4.h),
+                                          Row(
+                                            children: [
+                                              Text(
+                                                '${product.price.toStringAsFixed(0)} ج.م',
+                                                style: TextStyle(
+                                                  color: AppColors.primaryAccent,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 13.sp,
+                                                ),
+                                              ),
+                                              SizedBox(width: 6.w),
+                                              Container(
+                                                padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.primaryAccent.withOpacity(0.12),
+                                                  borderRadius: BorderRadius.circular(6.r),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.info_outline_rounded, color: AppColors.primaryAccent, size: 11.r),
+                                                    SizedBox(width: 3.w),
+                                                    Text(
+                                                      'التفاصيل 📋',
+                                                      style: TextStyle(
+                                                        color: AppColors.primaryAccent,
+                                                        fontSize: 10.sp,
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
                                       ),
+                                    ),
+
+                                    // Quantity Controls (+ / -)
+                                    Row(
+                                      children: [
+                                        IconButton(
+                                          onPressed: () => cartProvider.updateQuantity(product.id, item.quantity - 1),
+                                          icon: Icon(
+                                            item.quantity > 1 ? Icons.remove_circle_outline : Icons.delete_outline,
+                                            color: item.quantity > 1 ? AppColors.textMuted : AppColors.dangerStart,
+                                            size: 22.r,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${item.quantity}',
+                                          style: AppStyles.labelBold.copyWith(fontSize: 15.sp),
+                                        ),
+                                        IconButton(
+                                          onPressed: () => cartProvider.updateQuantity(product.id, item.quantity + 1),
+                                          icon: Icon(Icons.add_circle_outline, color: AppColors.primaryAccent, size: 22.r),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
                               ),
-
-                              // Quantity Controls (+ / -)
-                              Row(
-                                children: [
-                                  IconButton(
-                                    onPressed: () => cartProvider.updateQuantity(product.id, item.quantity - 1),
-                                    icon: Icon(
-                                      item.quantity > 1 ? Icons.remove_circle_outline : Icons.delete_outline,
-                                      color: item.quantity > 1 ? AppColors.textMuted : AppColors.dangerStart,
-                                      size: 22.r,
-                                    ),
-                                  ),
-                                  Text(
-                                    '${item.quantity}',
-                                    style: AppStyles.labelBold.copyWith(fontSize: 15.sp),
-                                  ),
-                                  IconButton(
-                                    onPressed: () => cartProvider.updateQuantity(product.id, item.quantity + 1),
-                                    icon: Icon(Icons.add_circle_outline, color: AppColors.primaryAccent, size: 22.r),
-                                  ),
-                                ],
-                              ),
-                            ],
+                            ),
                           ),
                         );
                       },
@@ -278,79 +314,117 @@ class CartScreen extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('المجموع الإجمالي', style: TextStyle(color: AppColors.textMuted, fontSize: 12.sp)),
+                  Text('المجموع الإجمالي', style: TextStyle(color: AppColors.textMuted, fontSize: 11.sp)),
                   SizedBox(height: 2.h),
                   Text(
                     '${cartProvider.grandTotal.toStringAsFixed(0)} ج.م',
-                    style: TextStyle(color: AppColors.primaryAccent, fontSize: 20.sp, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: AppColors.primaryAccent, fontSize: 18.sp, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
-              ElevatedButton.icon(
-                onPressed: () {
-                  PaymentMethodsModal.show(
-                    context,
-                    productName: 'طلب سلة Bola Designs (${cartProvider.itemCount} منتجات)',
-                    productPrice: cartProvider.grandTotal,
-                    onConfirmOrder: (methodTitle, senderInfo, [proofFile, proofBytes, proofFileName]) async {
-                      try {
-                        final itemsSummaryStr = cartProvider.items
-                            .map((i) => '${i.product.name} x${i.quantity}')
-                            .join(' • ');
+              SizedBox(width: 8.w),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    if (cartProvider.items.isEmpty) return;
 
-                        final productIdsStr = cartProvider.items
-                            .map((i) => i.product.id)
-                            .join(',');
+                    final authProvider = context.read<AuthProvider>();
+                    final user = authProvider.currentUser;
 
-                        await ApiService().createOrder(
-                          productIds: productIdsStr,
-                          itemsSummary: itemsSummaryStr,
-                          paymentMethod: methodTitle,
-                          totalPrice: cartProvider.grandTotal,
-                          paymentProof: proofFile,
-                          paymentProofBytes: proofBytes,
-                          paymentProofName: proofFileName,
-                        );
+                    final itemsSummaryStr = cartProvider.items
+                        .map((i) => '${i.product.name} x${i.quantity}')
+                        .join(' • ');
 
-                        cartProvider.addEarnedPoints(cartProvider.grandTotal);
-                        cartProvider.clearCart();
+                    final productIdsStr = cartProvider.items
+                        .map((i) => i.product.id)
+                        .join(',');
 
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('🎉 تم إرسال الطلب وإثبات الدفع بنجاح! بانتظار موافقة الأدمن.', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold)),
-                              backgroundColor: AppColors.successStart,
-                              duration: Duration(seconds: 4),
-                            ),
+                    final itemsDetails = cartProvider.items.map((i) => {
+                      'id': i.product.id,
+                      'name': i.product.name,
+                      'price': i.product.price,
+                      'quantity': i.quantity,
+                      'image_url': i.product.imageUrl ?? '',
+                      'description': i.product.description,
+                    }).toList();
+
+                    final cartProducts = cartProvider.items.map((i) => i.product).toList();
+                    final grandTotal = cartProvider.grandTotal;
+
+                    PaymentMethodsModal.show(
+                      context,
+                      productName: itemsSummaryStr,
+                      productPrice: grandTotal,
+                      onConfirmOrder: (String methodTitle, String senderInfo, dynamic proofFile, dynamic proofBytes, dynamic proofFileName) async {
+                        try {
+                          File? pFile;
+                          Uint8List? pBytes;
+                          String? pName;
+                          if (proofFile is File) pFile = proofFile;
+                          if (proofBytes is Uint8List) pBytes = proofBytes;
+                          if (proofFileName is String) pName = proofFileName;
+
+                          final res = await ApiService().createOrder(
+                            productIds: productIdsStr,
+                            itemsSummary: itemsSummaryStr,
+                            itemsDetails: itemsDetails,
+                            paymentMethod: methodTitle,
+                            senderInfo: senderInfo,
+                            totalPrice: grandTotal,
+                            paymentProof: pFile,
+                            paymentProofBytes: pBytes,
+                            paymentProofName: pName,
+                            userId: user?.id,
+                            userName: user?.displayName ?? user?.name ?? user?.username,
+                            userPhone: user?.phone,
                           );
 
-                          Navigator.of(context).pushAndRemoveUntil(
-                            PageRouteBuilder(
-                              pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
-                              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                return FadeTransition(opacity: animation, child: child);
-                              },
-                              transitionDuration: const Duration(milliseconds: 150),
-                            ),
-                            (route) => false,
-                          );
+                          if (res.statusCode == 201 && res.data != null && res.data['id'] != null) {
+                            final createdId = res.data['id'];
+
+                            if (context.mounted) {
+                              context.read<OrderProvider>().registerCreatedOrderId(createdId);
+                              context.read<OrderProvider>().fetchOrders(currentUser: user);
+                            }
+
+                            cartProvider.addEarnedPoints(grandTotal);
+                            cartProvider.clearCart();
+
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('🎉 تم إرسال الطلب وإيصال التحويل بنجاح! رقم الطلب: #$createdId', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  backgroundColor: AppColors.successStart,
+                                  duration: const Duration(seconds: 4),
+                                ),
+                              );
+
+                              Navigator.of(context).pushReplacement(
+                                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                              );
+                            }
+
+                            return true;
+                          } else {
+                            throw Exception('لم يُرجع السيرفر إشعار تأكيد وإنشاء للطلب');
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            final cleanMsg = e.toString().replaceFirst('Exception: ', '').replaceFirst('Exception', '').trim();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('حدث خطأ أثناء إرسال الطلب: $cleanMsg', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                backgroundColor: AppColors.dangerStart,
+                                duration: const Duration(seconds: 4),
+                              ),
+                            );
+                          }
+                          return false;
                         }
-                      } catch (e) {
-                        if (context.mounted) {
-                          final cleanMsg = e.toString().replaceFirst('Exception: ', '').replaceFirst('Exception', '').trim();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('تنبيه: $cleanMsg'),
-                              backgroundColor: AppColors.dangerStart,
-                              duration: const Duration(seconds: 4),
-                            ),
-                          );
-                        }
-                      }
-                    },
-                  );
-                },
-                icon: const Icon(Icons.check_circle_outline, color: Colors.white),
+                      },
+                    );
+                  },
+                  icon: const Icon(Icons.check_circle_outline, color: Colors.white),
                 label: Text('إتمام الطلب الآن', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14.sp)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryAccent,
@@ -358,8 +432,9 @@ class CartScreen extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
+        ),
         ],
       ),
     );

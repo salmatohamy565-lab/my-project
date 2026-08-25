@@ -6,14 +6,21 @@ import 'package:file_picker/file_picker.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_styles.dart';
 import '../../models/category_model.dart';
+import '../../models/subcategory_model.dart';
 import '../../models/product_model.dart';
+import '../../models/order_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/product_provider.dart';
+import '../../providers/cart_provider.dart';
+import '../../providers/order_provider.dart';
+import '../../services/api_service.dart';
 import '../../widgets/radial_background.dart';
 import '../../widgets/app_logo_bar.dart';
 import '../../widgets/custom_bottom_nav_bar.dart';
 import '../../widgets/payment_methods_modal.dart';
 import '../../widgets/product_image_widget.dart';
+import '../../widgets/product_details_modal.dart';
+import '../../widgets/photo_block_pricing_widget.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -31,6 +38,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   final _priceController = TextEditingController();
 
   CategoryModel? _selectedCategory;
+  SubcategoryModel? _formSelectedSubcategory;
   File? _selectedImage;
   int? _editingProductId;
   bool _showForm = false;
@@ -54,6 +62,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   void _resetForm() {
     setState(() {
       _editingProductId = null;
+      _formSelectedSubcategory = null;
       _selectedImage = null;
       _nameController.clear();
       _descController.clear();
@@ -87,7 +96,24 @@ class _ProductsScreenState extends State<ProductsScreen> {
       return;
     }
 
-    final categoryId = _selectedCategory?.id;
+    if (_selectedCategory == null) {
+      _showSnackbar('يرجى اختيار القسم الرئيسي أولاً', Colors.red);
+      return;
+    }
+
+    int? categoryId;
+    int? subcategoryId;
+
+    if (_selectedCategory!.subCategoriesList.isNotEmpty) {
+      if (_formSelectedSubcategory == null) {
+        _showSnackbar('⚠️ هذا القسم يحتوي على فئات فرعية، يرجى اختيار الفئة الفرعية لحفظ المنتج', Colors.red);
+        return;
+      }
+      subcategoryId = _formSelectedSubcategory!.id;
+    } else {
+      categoryId = _selectedCategory!.id;
+    }
+
     final productProvider = context.read<ProductProvider>();
     bool success;
 
@@ -99,6 +125,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
         price,
         _selectedImage,
         categoryId: categoryId,
+        subcategoryId: subcategoryId,
       );
     } else {
       success = await productProvider.addProduct(
@@ -107,11 +134,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
         price,
         _selectedImage,
         categoryId: categoryId,
+        subcategoryId: subcategoryId,
       );
     }
 
     if (success) {
-      _showSnackbar('✓ تم حفظ المنتج بنجاح', AppColors.successStart);
+      _showSnackbar('✓ تم حفظ المنتج بنجاح وتعيينه بالفئة الصحيحة', AppColors.successStart);
       _resetForm();
     } else {
       final error = productProvider.errorMessage ?? 'فشل حفظ المنتج';
@@ -205,6 +233,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
                       // Brand Hero card
                       _buildBrandHeroCard(),
+                      SizedBox(height: 16.h),
+
+                      // Photo Block & Frames Price Table
+                      const PhotoBlockPricingWidget(),
                       SizedBox(height: 20.h),
 
                       // Category Grid OR Category Detail Page
@@ -385,7 +417,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 
   Widget _buildCategoryGrid(List<ProductModel> products, bool isAdmin) {
-    final categories = CategoryModel.defaultCategories;
+    final categories = context.watch<ProductProvider>().categories;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -419,7 +451,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
           itemCount: categories.length,
           itemBuilder: (ctx, idx) {
             final cat = categories[idx];
-            final catProductCount = products.where((p) => p.categoryId == cat.id).length;
+            final catProductCount = products.where((p) =>
+              p.categoryId == cat.id ||
+              (p.subcategoryId != null && cat.subCategoriesList.map((s) => s.id).contains(p.subcategoryId))
+            ).length;
 
             return InkWell(
               onTap: () {
@@ -503,7 +538,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   Widget _buildCategoryDetailPage(List<ProductModel> products, String baseUrl, bool isAdmin, bool isCustomer, ProductProvider productProvider) {
     final catId = _selectedCategory!.id;
-    final catProducts = products.where((p) => p.categoryId == catId || (catId == 'wedding' && (p.categoryId == null || p.categoryId == ''))).toList();
+    final subIds = _selectedCategory!.subCategoriesList.map((s) => s.id).toSet();
+    final catProducts = products.where((p) =>
+      p.categoryId == catId ||
+      (p.subcategoryId != null && subIds.contains(p.subcategoryId))
+    ).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -596,13 +635,16 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Product image box
-                    ProductImageWidget(
-                      imageUrl: p.imageUrl,
-                      baseUrl: baseUrl,
-                      height: 180.h,
-                      fit: BoxFit.cover,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+                    // Product image box (Tap to view full details)
+                    GestureDetector(
+                      onTap: () => ProductDetailsModal.show(context, p),
+                      child: ProductImageWidget(
+                        imageUrl: p.imageUrl,
+                        baseUrl: baseUrl,
+                        height: 180.h,
+                        fit: BoxFit.contain,
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+                      ),
                     ),
                     // Product info
                     Padding(
@@ -615,18 +657,21 @@ class _ProductsScreenState extends State<ProductsScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(p.name, style: AppStyles.titleMedium.copyWith(fontSize: 16.sp)),
-                                    SizedBox(height: 4.h),
-                                    Text(
-                                      p.description.isEmpty ? 'بدون وصف' : p.description,
-                                      style: AppStyles.bodyMuted,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
+                                child: GestureDetector(
+                                  onTap: () => ProductDetailsModal.show(context, p),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(p.name, style: AppStyles.titleMedium.copyWith(fontSize: 16.sp)),
+                                      SizedBox(height: 4.h),
+                                      Text(
+                                        p.description.isEmpty ? 'انقر للاطلاع على المواصفات والوصف 📋' : p.description,
+                                        style: AppStyles.bodyMuted,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                               Container(
@@ -636,7 +681,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                                   borderRadius: BorderRadius.circular(10.r),
                                 ),
                                 child: Text(
-                                  '${p.price.toStringAsFixed(2)} ج.م',
+                                  p.price <= 0 ? 'تواصل معنا' : '${p.price.toStringAsFixed(0)} ج.م',
                                   style: AppStyles.labelBold.copyWith(color: Colors.white, fontSize: 12.sp),
                                 ),
                               )
@@ -654,8 +699,71 @@ class _ProductsScreenState extends State<ProductsScreen> {
                                       context,
                                       productName: p.name,
                                       productPrice: p.price,
-                                      onConfirmOrder: (methodTitle, senderInfo, [proofFile]) {
-                                        _showSnackbar('✓ تم استلام طلبك لـ "${p.name}" عبر $methodTitle بنجاح!', AppColors.successStart);
+                                      onConfirmOrder: (methodTitle, senderInfo, [proofFile, proofBytes, proofFileName]) async {
+                                        try {
+                                          final user = context.read<AuthProvider>().currentUser;
+                                          final newOrderId = DateTime.now().millisecondsSinceEpoch % 100000;
+                                          final localOrder = OrderModel(
+                                            id: newOrderId,
+                                            userId: user?.id ?? 0,
+                                            customerName: user?.displayName ?? user?.name ?? user?.username ?? 'عميل',
+                                            customerPhone: user?.phone ?? '01000000000',
+                                            productIds: p.id.toString(),
+                                            itemsSummary: '${p.name} x1',
+                                            products: [p],
+                                            status: 'pending_approval',
+                                            totalPrice: p.price,
+                                            paymentMethod: methodTitle,
+                                            createdAt: DateTime.now(),
+                                          );
+                                          if (context.mounted) {
+                                            context.read<OrderProvider>().addLocalOrder(localOrder);
+                                          }
+                                          final itemsDetails = [
+                                            {
+                                              'id': p.id,
+                                              'name': p.name,
+                                              'price': p.price,
+                                              'quantity': 1,
+                                              'image_url': p.imageUrl ?? '',
+                                              'description': p.description,
+                                            }
+                                          ];
+                                          if (context.mounted) {
+                                            context.read<OrderProvider>().addLocalOrder(localOrder);
+                                          }
+
+                                          ApiService().createOrder(
+                                            productIds: p.id,
+                                            itemsSummary: '${p.name} x1',
+                                            itemsDetails: itemsDetails,
+                                            paymentMethod: methodTitle,
+                                            senderInfo: senderInfo,
+                                            totalPrice: p.price,
+                                            paymentProof: proofFile,
+                                            paymentProofBytes: proofBytes,
+                                            paymentProofName: proofFileName,
+                                            userId: user?.id,
+                                            userName: user?.displayName ?? user?.name ?? user?.username,
+                                            userPhone: user?.phone,
+                                          ).then((res) {
+                                            if (context.mounted) {
+                                              if (res.data != null && res.data['id'] != null) {
+                                                context.read<OrderProvider>().registerCreatedOrderId(res.data['id']);
+                                              }
+                                              context.read<OrderProvider>().fetchOrders(currentUser: user);
+                                            }
+                                          });
+
+                                          if (context.mounted) {
+                                            context.read<CartProvider>().clearCart();
+                                            _showSnackbar('🎉 تم إرسال طلبك لـ "${p.name}" عبر $methodTitle بنجاح! بانتظار موافقة الأدمن.', AppColors.successStart);
+                                          }
+                                        } catch (e) {
+                                          if (context.mounted) {
+                                            _showSnackbar('حدث خطأ أثناء إرسال الطلب: $e', AppColors.dangerStart);
+                                          }
+                                        }
                                       },
                                     );
                                   },
@@ -774,7 +882,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 children: [
                   Icon(_selectedCategory!.icon, color: AppColors.primaryAccent, size: 18.sp),
                   SizedBox(width: 8.w),
-                  Text('القسم الحالي المربوط بالمنتج: ', style: TextStyle(fontSize: 12.sp, color: AppColors.textMuted)),
+                  Text('القسم الرئيسي: ', style: TextStyle(fontSize: 12.sp, color: AppColors.textMuted)),
                   Text(
                     _selectedCategory!.title,
                     style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.bold, color: AppColors.primaryAccent),
@@ -783,6 +891,63 @@ class _ProductsScreenState extends State<ProductsScreen> {
               ),
             ),
             SizedBox(height: 14.h),
+
+            // Subcategory Selection (mandatory if category has subcategories)
+            if (_selectedCategory!.subCategoriesList.isNotEmpty) ...[
+              Text('الفئة الفرعية *', style: AppStyles.labelBold.copyWith(color: Colors.amberAccent)),
+              SizedBox(height: 6.h),
+              DropdownButtonFormField<SubcategoryModel>(
+                value: _formSelectedSubcategory,
+                dropdownColor: AppColors.cardBg,
+                style: const TextStyle(color: AppColors.textMain),
+                decoration: InputDecoration(
+                  hintText: 'اختر الفئة الفرعية',
+                  contentPadding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12.r),
+                    borderSide: const BorderSide(color: AppColors.primaryAccent),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12.r),
+                    borderSide: const BorderSide(color: AppColors.primaryAccent, width: 2),
+                  ),
+                ),
+                items: _selectedCategory!.subCategoriesList.map((subcat) {
+                  return DropdownMenuItem<SubcategoryModel>(
+                    value: subcat,
+                    child: Text(subcat.name, style: const TextStyle(color: AppColors.textMain)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  setState(() {
+                    _formSelectedSubcategory = val;
+                  });
+                },
+              ),
+              SizedBox(height: 14.h),
+            ] else ...[
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.04),
+                  borderRadius: BorderRadius.circular(10.r),
+                  border: Border.all(color: AppColors.borderLight),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: AppColors.textMuted, size: 16),
+                    SizedBox(width: 8.w),
+                    Expanded(
+                      child: Text(
+                        'لا توجد فئات فرعية لـ "${_selectedCategory!.title}" - سيتم ربط المنتج مباشرة بالقسم الرئيسي.',
+                        style: TextStyle(color: AppColors.textMuted, fontSize: 11.sp),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 14.h),
+            ],
 
             Text('اسم المنتج', style: AppStyles.labelBold),
             SizedBox(height: 6.h),

@@ -42,19 +42,25 @@ def handle_options_preflight():
         origin = request.headers.get('Origin') or '*'
         response = make_response('', 200)
         response.headers['Access-Control-Allow-Origin'] = origin
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        if origin != '*':
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Cookie, X-Requested-With, Accept'
         response.headers['Access-Control-Allow-Methods'] = 'GET, PUT, POST, DELETE, OPTIONS'
         return response
+
+@app.route('/health', methods=['GET'])
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "ok", "service": "bola-designs-backend"}), 200
 
 @app.after_request
 def add_cors_headers(response):
     origin = request.headers.get('Origin')
     if origin:
         response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
     else:
         response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Credentials'] = 'true'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Cookie, X-Requested-With, Accept'
     response.headers['Access-Control-Allow-Methods'] = 'GET, PUT, POST, DELETE, OPTIONS'
     return response
@@ -112,7 +118,7 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now)
 
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+        self.password_hash = password
 
     def check_password(self, password):
         if not self.password_hash or not password:
@@ -356,11 +362,14 @@ def ensure_product_columns():
 
 # ===================== إنشاء قاعدة البيانات =====================
 with app.app_context():
-    db.create_all()
-    ensure_user_columns()
-    ensure_attendance_columns()
-    ensure_task_columns()
-    ensure_product_columns()
+    try:
+        db.create_all()
+        ensure_user_columns()
+        ensure_attendance_columns()
+        ensure_task_columns()
+        ensure_product_columns()
+    except Exception as init_err:
+        print(f"[DB INIT NOTICE] {init_err}")
 
     # List of initial required accounts
     initial_users = [
@@ -762,6 +771,15 @@ def employee_files_page(user_id):
     return render_template('employee_detail.html', user=target_user, files=files, attendance=attendance, tasks=tasks, current_user=current_user)
 
 
+def normalize_phone(phone):
+    if not phone:
+        return ''
+    digits = ''.join(c for c in str(phone) if c.isdigit())
+    if len(digits) > 10:
+        return digits[-10:]
+    return digits
+
+
 def find_user_by_identifier(identifier):
     if not identifier:
         return None
@@ -770,6 +788,7 @@ def find_user_by_identifier(identifier):
     return User.query.filter(
         or_(
             db.func.lower(User.username) == clean,
+            db.func.lower(User.name) == clean,
             db.func.lower(User.email) == clean,
             db.func.lower(User.username) == prefix,
             db.func.lower(User.email) == prefix
@@ -777,7 +796,9 @@ def find_user_by_identifier(identifier):
     ).first()
 
 # ===================== المسارات =====================
+
 @app.route('/api/customer/register', methods=['POST'])
+@app.route('/api/auth/register', methods=['POST'])
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json() or {}
@@ -835,24 +856,39 @@ def register():
     return jsonify({"message": "تم إنشاء الحساب بنجاح", "user": user.to_dict(), "token": str(user.id)}), 201
 
 
-def _perform_login(username_raw, password_raw, remember):
-    if not username_raw or not password_raw:
-        return jsonify({"error": "اسم المستخدم وكلمة السر مطلوبة"}), 400
+def _perform_login(username_raw, password_raw=None, remember=False, phone_raw=None):
+    clean_username = str(username_raw or '').strip()
+    clean_phone = str(phone_raw or '').strip()
+    clean_password = str(password_raw or '').strip() if password_raw else None
 
-    clean_username = str(username_raw).strip()
-    clean_password = str(password_raw).strip()
+    if not clean_username:
+        return jsonify({"error": "اسم المستخدم أو رقم الهاتف غير صحيح"}), 400
 
     user = find_user_by_identifier(clean_username)
 
-    if user and not user.email and '@' in clean_username:
-        try:
-            user.email = clean_username.lower()
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
+    if not user:
+        return jsonify({"error": "اسم المستخدم أو رقم الهاتف غير صحيح"}), 401
 
-    if not user or not user.check_password(clean_password):
-        return jsonify({"error": "اسم المستخدم أو البريد أو كلمة السر غير صحيحة"}), 401
+    if clean_phone:
+        user_phone_norm = normalize_phone(user.phone)
+        input_phone_norm = normalize_phone(clean_phone)
+
+        if user_phone_norm and input_phone_norm:
+            if user_phone_norm != input_phone_norm:
+                return jsonify({"error": "اسم المستخدم أو رقم الهاتف غير صحيح"}), 401
+        elif not user_phone_norm and input_phone_norm:
+            user.phone = clean_phone
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+        else:
+            return jsonify({"error": "اسم المستخدم أو رقم الهاتف غير صحيح"}), 401
+    elif clean_password:
+        if not user.check_password(clean_password):
+            return jsonify({"error": "اسم المستخدم أو البريد أو كلمة السر غير صحيحة"}), 401
+    else:
+        return jsonify({"error": "اسم المستخدم أو رقم الهاتف غير صحيح"}), 400
 
     session['user_id'] = user.id
     if remember:
@@ -861,19 +897,31 @@ def _perform_login(username_raw, password_raw, remember):
         session.permanent = False
 
     record_login_attendance(user.id)
-    return jsonify({"message": "تم تسجيل الدخول", "user": user.to_dict(), "token": str(user.id)}), 200
+    return jsonify({"message": "تم تسجيل الدخول بنجاح", "user": user.to_dict(), "token": str(user.id)}), 200
 
 
 @app.route('/api/customer/login', methods=['POST'])
+@app.route('/api/customer/phone-login', methods=['POST'])
 def customer_login():
     data = request.get_json() or {}
-    return _perform_login(data.get('username'), data.get('password'), data.get('remember'))
+    return _perform_login(
+        username_raw=data.get('username') or data.get('identifier') or data.get('name'),
+        password_raw=data.get('password'),
+        remember=data.get('remember', False),
+        phone_raw=data.get('phone')
+    )
 
 
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json() or {}
-    return _perform_login(data.get('username'), data.get('password'), data.get('remember'))
+    return _perform_login(
+        username_raw=data.get('username') or data.get('identifier') or data.get('name'),
+        password_raw=data.get('password'),
+        remember=data.get('remember', False),
+        phone_raw=data.get('phone')
+    )
+
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
@@ -1037,8 +1085,8 @@ def forget_password_api():
 
     import random
     otp_code = str(random.randint(100000, 999999))
-    expires = time.time() + 60
-    
+    expires = time.time() + 600  # 10 minutes expiry in Supabase DB
+
     RESET_CODES[email.lower()] = {
         'code': otp_code,
         'expires_at': expires
@@ -1049,20 +1097,29 @@ def forget_password_api():
             'expires_at': expires
         }
 
-    # Save to User model in DB
+    # Save directly to User model and otp_codes table in Supabase DB
     try:
         user.reset_otp = otp_code
         user.reset_otp_expires_at = expires
         db.session.commit()
+
+        # Insert record into Supabase PostgreSQL otp_codes table
+        db.session.execute(
+            text("INSERT INTO otp_codes (email, code, expires_at) VALUES (:email, :code, TO_TIMESTAMP(:expires))"),
+            {"email": user.email or email, "code": otp_code, "expires": expires}
+        )
+        db.session.commit()
+        print(f"[SUPABASE OTP DB SUCCESS] Saved OTP {otp_code} directly in Supabase DB for {email}")
     except Exception as e:
-        print(f"[DB OTP SAVE WARNING] {e}")
+        print(f"[SUPABASE OTP DB WARNING] {e}")
+        db.session.rollback()
 
     # Create instant notification in Supabase DB for the user
     try:
         otp_notif = AppNotification(
             user_id=user.id,
             title="🔐 كود استعادة كلمة السر",
-            message=f"كود التحقق الخاص بك لإعادة تعيين كلمة السر هو: {otp_code} (صالح لمدة دقيقة واحدة)",
+            message=f"كود التحقق الخاص بك لإعادة تعيين كلمة السر هو: {otp_code} (صالح لمدة 10 دقائق)",
             is_read=False,
             created_at=datetime.now()
         )
@@ -1521,28 +1578,24 @@ def update_order_status(order_id):
 
 PROMO_NOTIFICATION_POOL = [
     {
-        "title": "☕ خصم حصري 15% على المجات الحرارية والطباعة!",
-        "message": "صمم مجك الخاص بصورتك أو اسمك بأعلى جودة ألوان من Bola Designs الآن واحصل على خصم فوري!"
+        "title": "🖤 عرض خاص لفترة محدودة",
+        "message": "متنسيش تطلب برواز صورتك النهاردة 🖤 عرض خاص لفترة محدودة"
     },
     {
-        "title": "🚀 طور هوية مشروعك أو شركتك بأعلى مستوى!",
-        "message": "احصل على تصميم هوية بصرية كاملة، كروت شخصية، وإعلانات احترافية لجذب المزيد من العملاء."
+        "title": "✨ فاجئي أولادك ببرواز مميز",
+        "message": "فاجئي أولادك ببرواز مميز يليق باللحظات الغالية ✨"
     },
     {
-        "title": "🎁 هدايا ومناسبات سعيدة مخصصة لأطفالك!",
-        "message": "اكتشف أحدث تصاميم الطباعة المخصصة للأطفال والمناسبات الهامة واجعل لحظاتكم لا تُنسى!"
+        "title": "✨ برواز فاخر بلمسة ذهبية",
+        "message": "برواز فاخر بلمسة ذهبية... اطلبيه دلوقتي قبل ما العرض يخلص"
     },
     {
-        "title": "💎 عروض نقاط الولاء المُميّزة!",
-        "message": "جمع نقاطك مع كل طلب جديد واستبدلها بخصومات كاش مباشرة داخل السلة عند الشراء."
-    },
-    {
-        "title": "🔥 شحن سريع وتجهيز فورى لجميع الطلبات!",
-        "message": "فريق بولا ديزاينز جاهز لتنفيذ طلبك وتسليمه بأعلى دقة وسرعة التجهيز والتوصيل."
+        "title": "🖼️ ذكريات تدوم للأبد",
+        "message": "متبقاش الذكريات مجرد صور... حوّليها لبرواز يدوم"
     }
 ]
 
-def ensure_15min_supabase_notification(user_id):
+def ensure_5min_supabase_notification(user_id):
     try:
         latest = AppNotification.query.filter_by(user_id=user_id).order_by(AppNotification.created_at.desc()).first()
         should_add = False
@@ -1550,7 +1603,7 @@ def ensure_15min_supabase_notification(user_id):
             should_add = True
         else:
             time_diff = (datetime.now() - latest.created_at).total_seconds()
-            if time_diff >= 15 * 60:  # 15 minutes (900 seconds)
+            if time_diff >= 5 * 60:  # 5 minutes (300 seconds)
                 should_add = True
 
         if should_add:
@@ -1565,7 +1618,7 @@ def ensure_15min_supabase_notification(user_id):
             )
             db.session.add(new_notif)
             db.session.commit()
-            print(f"[SUPABASE NOTIFICATION] Inserted 15-min notification for user {user_id} into Supabase DB")
+            print(f"[SUPABASE CRON 5-MIN NOTIFICATION] Inserted 5-min notification for user {user_id} into Supabase DB")
     except Exception as e:
         print(f"[SUPABASE NOTIFICATION ERROR] {e}")
         db.session.rollback()
@@ -1577,8 +1630,8 @@ def get_notifications():
     if not current_user:
         return jsonify([]), 200
 
-    # Automatically generate 15-minute periodic notification into Supabase DB
-    ensure_15min_supabase_notification(current_user.id)
+    # Automatically generate 5-minute periodic notification into Supabase DB
+    ensure_5min_supabase_notification(current_user.id)
 
     user_notifs = AppNotification.query.filter_by(user_id=current_user.id).order_by(AppNotification.created_at.desc()).limit(30).all()
     return jsonify([n.to_dict() for n in user_notifs]), 200
@@ -1893,15 +1946,7 @@ def mark_task_done(task_id):
     db.session.commit()
     return jsonify(task.to_dict()), 200
 
-# ===================== الواجهة الرئيسية و فحص الصحة =====================
-
-@app.route('/health', methods=['GET'])
-def health_check():
-    return jsonify({
-        "status": "ok",
-        "service": "Bola Designs Backend API",
-        "timestamp": datetime.now().isoformat()
-    }), 200
+# ===================== الواجهة الرئيسية فحص الصحة =====================
 
 @app.route('/download', methods=['GET'])
 @app.route('/app', methods=['GET'])
@@ -2072,6 +2117,7 @@ def debug_templates():
 def privacy_policy():
     return render_template('privacy_policy.html')
 
-
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=False, use_reloader=False)
+    port = int(os.environ.get('PORT', 5001))
+    print(f"Starting Bola Backend Server on http://0.0.0.0:{port}")
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)

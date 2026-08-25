@@ -21,6 +21,8 @@ import '../../services/api_service.dart';
 import '../../widgets/radial_background.dart';
 import '../../widgets/custom_bottom_nav_bar.dart';
 import '../../widgets/app_logo_bar.dart';
+import '../../widgets/product_image_widget.dart';
+import '../../widgets/product_details_modal.dart';
 import '../products/products_screen.dart';
 
 class EmployeeDashboard extends StatefulWidget {
@@ -46,7 +48,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
       _refreshTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
@@ -56,6 +58,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
       });
     });
   }
+
 
   @override
   void dispose() {
@@ -69,7 +72,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
     if (currentUser == null) return;
 
     await Future.wait<void>([
-      context.read<OrderProvider>().fetchOrders(status: _orderStatusFilter),
+      context.read<OrderProvider>().fetchOrders(status: _orderStatusFilter, currentUser: currentUser),
       context.read<TaskProvider>().fetchTasks(),
       context.read<UserProvider>().fetchUserFiles(currentUser.id),
       context.read<UserProvider>().fetchUsers(),
@@ -237,7 +240,13 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
     final allUsers = userProvider.users;
 
     // Filter colleagues (exclude current user)
-    final colleagues = allUsers.where((u) => u.id != currentUser?.id).toList();
+    final colleagues = allUsers.where((u) {
+      if (u.id == currentUser?.id) return false;
+      final r = u.role.toLowerCase();
+      final un = u.username.toLowerCase();
+      return r == 'employee' || r == 'admin' || r == 'owner' || r == 'supervisor' || un.startsWith('emp_') || un.startsWith('admin_');
+    }).toList();
+
 
     return Scaffold(
       key: _scaffoldKey,
@@ -305,10 +314,11 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
                       ),
                       labelColor: Colors.white,
                       unselectedLabelColor: AppColors.textMuted,
-                      labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.sp),
+                      labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.sp),
                       tabs: const [
-                        Tab(text: '📁 تبادل الملفات'),
+                        Tab(text: '📦 طلبات العملاء'),
                         Tab(text: '📝 المهام'),
+                        Tab(text: '📁 الملفات'),
                       ],
                     ),
                   ),
@@ -321,14 +331,18 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  // Tab 1: Inter-Employee File Sharing
-                  _buildFileSharingTab(files, colleagues, currentUser?.id),
+                  // Tab 1: Orders Processing
+                  _buildOrdersTab(context.watch<OrderProvider>().orders, context.read<OrderProvider>(), ApiService().baseUrl),
 
                   // Tab 2: Tasks
                   _buildTasksTab(tasks, taskProvider),
+
+                  // Tab 3: Inter-Employee File Sharing
+                  _buildFileSharingTab(files, colleagues, currentUser?.id),
                 ],
               ),
             ),
+
           ],
         ),
       ),
@@ -496,10 +510,32 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
           SizedBox(height: 4.h),
           Row(
             children: [
-              const Icon(Icons.phone_outlined, size: 16, color: AppColors.primaryAccent),
+              const Icon(Icons.phone_outlined, size: 16, color: Colors.green),
               SizedBox(width: 6.w),
               Text('الهاتف: ', style: AppStyles.bodyMuted.copyWith(fontSize: 12.sp)),
-              Text(order.customerPhone.isEmpty ? 'غير محدد' : order.customerPhone, style: AppStyles.bodyDefault.copyWith(fontSize: 12.sp)),
+              Expanded(
+                child: Text(
+                  order.customerPhone.isEmpty ? 'غير محدد' : order.customerPhone,
+                  style: AppStyles.bodyDefault.copyWith(fontSize: 12.sp, fontWeight: FontWeight.bold),
+                ),
+              ),
+              if (order.customerPhone.isNotEmpty) ...[
+                IconButton(
+                  onPressed: () => _makeCall(order.customerPhone),
+                  icon: const Icon(Icons.phone_rounded, color: Colors.green, size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'اتصال هاتفي ورنة على التليفون',
+                ),
+                SizedBox(width: 10.w),
+                IconButton(
+                  onPressed: () => _openWhatsApp(order.customerPhone, order.id),
+                  icon: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.teal, size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'مراسلة واتساب',
+                ),
+              ],
             ],
           ),
           SizedBox(height: 4.h),
@@ -518,6 +554,68 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
               ),
             ],
           ),
+          if (order.products.isNotEmpty) ...[
+            SizedBox(height: 8.h),
+            SizedBox(
+              height: 54.h,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: order.products.length,
+                separatorBuilder: (_, __) => SizedBox(width: 8.w),
+                itemBuilder: (context, pIdx) {
+                  final prod = order.products[pIdx];
+                  return InkWell(
+                    onTap: () => ProductDetailsModal.show(context, prod),
+                    borderRadius: BorderRadius.circular(10.r),
+                    child: Container(
+                      width: 150.w,
+                      padding: EdgeInsets.all(6.r),
+                      decoration: BoxDecoration(
+                        color: AppColors.inputBg,
+                        borderRadius: BorderRadius.circular(10.r),
+                        border: Border.all(color: AppColors.primaryAccent.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8.r),
+                            child: SizedBox(
+                              width: 38.w,
+                              height: 38.h,
+                              child: ProductImageWidget(
+                                imageUrl: prod.imageUrl,
+                                baseUrl: baseUrl,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 6.w),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  prod.name.isNotEmpty ? prod.name : 'منتج',
+                                  style: TextStyle(color: AppColors.textMain, fontSize: 10.5.sp, fontWeight: FontWeight.bold),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  '${prod.price.toStringAsFixed(0)} ج.م',
+                                  style: TextStyle(color: AppColors.primaryAccent, fontSize: 10.sp),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
           SizedBox(height: 6.h),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -556,7 +654,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
           const Divider(color: AppColors.borderLight, height: 20),
           Row(
             children: [
-              if (order.status == 'pending') ...[
+              if (order.status == 'pending' || order.status == 'pending_approval') ...[
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () => _updateOrderStatus(order.id, 'preparing'),
@@ -968,5 +1066,28 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
         ],
       ),
     );
+  }
+
+  Future<void> _makeCall(String phone) async {
+    final cleanPhone = phone.replaceAll(RegExp(r'[^\d+]'), '');
+    if (cleanPhone.isEmpty) return;
+    final Uri url = Uri.parse('tel:$cleanPhone');
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _openWhatsApp(String phone, int orderId) async {
+    final cleanPhone = phone.replaceAll(RegExp(r'[^\d]'), '');
+    if (cleanPhone.isEmpty) return;
+    String formatted = cleanPhone.startsWith('0') ? '2$cleanPhone' : cleanPhone;
+    final Uri url = Uri.parse('https://wa.me/$formatted?text=${Uri.encodeComponent("مرحباً بك من Bola Designs بخصوص الطلب رقم #$orderId")}');
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {}
   }
 }

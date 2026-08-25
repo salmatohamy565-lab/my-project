@@ -35,10 +35,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     final user = context.read<AuthProvider>().currentUser;
     final initialName = (user?.name != null && user!.name!.isNotEmpty)
         ? user.name!
-        : (user != null && user.username.isNotEmpty ? user.username : 'salma');
-    final initialPhone = (user?.phone != null && user!.phone!.isNotEmpty)
-        ? user.phone!
-        : '01271122860';
+        : (user?.username ?? '');
+    final initialPhone = user?.phone ?? '';
 
     _nameController = TextEditingController(text: initialName);
     _phoneController = TextEditingController(text: initialPhone);

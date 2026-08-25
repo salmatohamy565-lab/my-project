@@ -18,18 +18,13 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _obscurePassword = true;
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
+    _usernameController.dispose();
     _phoneController.dispose();
-    _passwordController.dispose();
     super.dispose();
   }
 
@@ -37,40 +32,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_formKey.currentState!.validate()) return;
     final authProvider = context.read<AuthProvider>();
 
-    final success = await authProvider.register(
-      email: _emailController.text.trim(),
-      password: _passwordController.text,
-      name: _nameController.text.trim(),
-      phone: _phoneController.text.trim(),
+    final rawInput = _usernameController.text.trim();
+    final usernameToUse = rawInput.contains('@')
+        ? AuthProvider.extractUsernameFromEmail(rawInput)
+        : rawInput;
+
+    final success = await authProvider.passwordlessRegister(
+      usernameToUse,
+      _phoneController.text.trim(),
     );
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(success ? 'تم إنشاء الحساب بنجاح!' : 'مرحباً بك! تم إعداد الحساب ودخول التطبيق.'),
-          backgroundColor: AppColors.emeraldGreen,
-        ),
-      );
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const CompleteProfileScreen()),
-      );
-    }
-  }
-
-  void _handleGoogleSignIn() async {
-    final authProvider = context.read<AuthProvider>();
-    final success = await authProvider.loginWithGoogle();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تم الدخول بواسطة Google بنجاح!'),
-          backgroundColor: AppColors.emeraldGreen,
-        ),
-      );
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const CompleteProfileScreen()),
-      );
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم إنشاء الحساب بنجاح!'),
+            backgroundColor: AppColors.emeraldGreen,
+          ),
+        );
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const CompleteProfileScreen()),
+        );
+      } else {
+        final err = authProvider.errorMessage ?? 'فشل إنشاء الحساب، يرجى التأكد من البيانات والاتصال بالشبكة';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✕ $err'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     }
   }
 
@@ -108,7 +99,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           SizedBox(height: 6.h),
                           Text(
-                            'قم بإنشاء حسابك للانضمام إلى منصة Bola Designs',
+                            'قم بإنشاء حسابك بسرعة باستعمال الاسم ورقم الهاتف',
                             style: AppStyles.bodyMuted,
                             textAlign: TextAlign.center,
                           ),
@@ -131,33 +122,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                           ],
 
-                          // Name Field
+                          // Username Field
                           TextFormField(
-                            controller: _nameController,
+                            controller: _usernameController,
                             textAlign: TextAlign.right,
-                            decoration: InputDecoration(
-                              labelText: 'الاسم الكامل',
-                              prefixIcon: const Icon(Icons.person_outline, color: AppColors.primaryAccent),
-                            ),
-                            validator: (val) {
-                              if (val == null || val.trim().isEmpty) return 'يرجى إدخال الاسم';
-                              return null;
-                            },
-                          ),
-                          SizedBox(height: 16.h),
-
-                          // Email Field
-                          TextFormField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            textAlign: TextAlign.right,
+                            style: const TextStyle(color: AppColors.textMain),
                             decoration: const InputDecoration(
-                              labelText: 'البريد الإلكتروني',
-                              prefixIcon: Icon(Icons.email_outlined, color: AppColors.primaryAccent),
+                              labelText: 'اسم المستخدم',
+                              hintText: 'أدخل اسم المستخدم أو اسمك',
+                              prefixIcon: Icon(Icons.person_outline, color: AppColors.primaryAccent),
                             ),
                             validator: (val) {
-                              if (val == null || val.trim().isEmpty) return 'يرجى إدخال البريد الإلكتروني';
-                              if (!val.contains('@')) return 'يرجى إدخال بريد إلكتروني صحيح';
+                              if (val == null || val.trim().isEmpty) return 'يرجى إدخال اسم المستخدم';
                               return null;
                             },
                           ),
@@ -168,36 +144,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             controller: _phoneController,
                             keyboardType: TextInputType.phone,
                             textAlign: TextAlign.right,
+                            style: const TextStyle(color: AppColors.textMain),
                             decoration: const InputDecoration(
-                              labelText: 'رقم الهاتف (اختياري)',
+                              labelText: 'رقم الهاتف',
+                              hintText: 'أدخل رقم الهاتف الخاص بك',
                               prefixIcon: Icon(Icons.phone_outlined, color: AppColors.primaryAccent),
                             ),
-                          ),
-                          SizedBox(height: 16.h),
-
-                          // Password Field
-                          TextFormField(
-                            controller: _passwordController,
-                            obscureText: _obscurePassword,
-                            textAlign: TextAlign.right,
-                            decoration: InputDecoration(
-                              labelText: 'كلمة السر',
-                              prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primaryAccent),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                                  color: AppColors.textMuted,
-                                ),
-                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                              ),
-                            ),
                             validator: (val) {
-                              if (val == null || val.isEmpty) return 'يرجى إدخال كلمة السر';
-                              if (val.length < 6) return 'كلمة السر يجب أن تكون 6 أحرف على الأقل';
+                              if (val == null || val.trim().isEmpty) return 'يرجى إدخال رقم الهاتف';
                               return null;
                             },
                           ),
                           SizedBox(height: 24.h),
+
 
                           // Register Button
                           ElevatedButton(
@@ -217,31 +176,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   )
                                 : Text('إنشاء الحساب', style: AppStyles.buttonText.copyWith(color: Colors.white)),
                           ),
-                          SizedBox(height: 16.h),
 
-                          Row(
-                            children: [
-                              const Expanded(child: Divider(color: AppColors.borderLight)),
-                              Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 12.w),
-                                child: Text('أو', style: AppStyles.bodyMuted),
-                              ),
-                              const Expanded(child: Divider(color: AppColors.borderLight)),
-                            ],
-                          ),
-                          SizedBox(height: 16.h),
-
-                          // Google Sign-In Button
-                          OutlinedButton.icon(
-                            onPressed: authProvider.isLoading ? null : _handleGoogleSignIn,
-                            icon: Icon(Icons.g_mobiledata, size: 28.sp, color: AppColors.primaryAccent),
-                            label: Text('تسجيل بواسطة Google', style: AppStyles.labelBold),
-                            style: OutlinedButton.styleFrom(
-                              padding: EdgeInsets.symmetric(vertical: 12.h),
-                              side: const BorderSide(color: AppColors.borderMedium),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
-                            ),
-                          ),
                           SizedBox(height: 16.h),
 
                           Row(

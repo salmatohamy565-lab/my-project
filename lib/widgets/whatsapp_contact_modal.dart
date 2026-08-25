@@ -16,6 +16,16 @@ class WhatsAppContactModal extends StatelessWidget {
     );
   }
 
+  Future<void> _makePhoneCall(BuildContext context, String rawPhone) async {
+    final String cleanPhone = rawPhone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final Uri phoneUri = Uri.parse('tel:$cleanPhone');
+    try {
+      if (await canLaunchUrl(phoneUri)) {
+        await launchUrl(phoneUri);
+      }
+    } catch (_) {}
+  }
+
   Future<void> _launchWhatsApp(BuildContext context, String rawPhone) async {
     final String cleanPhone = rawPhone.replaceAll(RegExp(r'[^0-9]'), '');
     final String formattedPhone = cleanPhone.startsWith('0') ? '2$cleanPhone' : cleanPhone;
@@ -200,7 +210,16 @@ class WhatsAppContactModal extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios_rounded, color: AppColors.textMuted, size: 16.r),
+            IconButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _makePhoneCall(context, phoneNumber);
+              },
+              icon: const Icon(Icons.phone_in_talk_rounded, color: Colors.green),
+              tooltip: 'رنة على التليفون / اتصال مباشر',
+            ),
+            SizedBox(width: 4.w),
+            Icon(Icons.arrow_forward_ios_rounded, color: AppColors.textMuted, size: 14.r),
           ],
         ),
       ),

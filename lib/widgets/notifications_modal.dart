@@ -1,15 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:provider/provider.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_styles.dart';
 import '../models/notification_model.dart';
+import '../providers/auth_provider.dart';
+import '../providers/notification_provider.dart';
 import '../services/api_service.dart';
 
 class NotificationsModal extends StatefulWidget {
   const NotificationsModal({super.key});
 
   static void show(BuildContext context) {
+    context.read<NotificationProvider>().markAllAsRead();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -32,8 +36,8 @@ class _NotificationsModalState extends State<NotificationsModal> {
   void initState() {
     super.initState();
     _fetchNotifications();
-    // Auto refresh notifications from Supabase DB every 15 minutes
-    _refreshTimer = Timer.periodic(const Duration(minutes: 15), (_) {
+    // Auto refresh notifications from Supabase DB every 30 seconds
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _fetchNotifications();
     });
   }
@@ -46,18 +50,41 @@ class _NotificationsModalState extends State<NotificationsModal> {
 
   Future<void> _fetchNotifications() async {
     try {
-      final res = await _apiService.getNotifications();
+      final user = context.read<AuthProvider>().currentUser;
+      final res = await _apiService.getNotifications(userId: user?.id);
       if (mounted) {
-        final list = (res.data as List).map((e) => NotificationModel.fromJson(e)).toList();
+        final List<dynamic> dataList = res.data is List ? res.data : [];
+        final fetchedSb = dataList.map((e) => NotificationModel.fromJson(e)).toList();
+
+        final providerNotifs = context.read<NotificationProvider>().notifications;
+
+        final combined = <NotificationModel>[...fetchedSb];
+        for (final pn in providerNotifs) {
+          if (!combined.any((n) => n.id == pn.id)) {
+            combined.add(pn);
+          }
+        }
+
+        combined.sort((a, b) {
+          final dtA = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final dtB = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return dtB.compareTo(dtA);
+        });
+
         setState(() {
-          _notifications = list;
+          _notifications = combined;
           _isLoading = false;
         });
-        // Mark as read after fetching
-        _apiService.markNotificationsRead();
+        context.read<NotificationProvider>().markAllAsRead();
       }
     } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        final providerNotifs = context.read<NotificationProvider>().notifications;
+        setState(() {
+          _notifications = providerNotifs;
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -79,19 +106,27 @@ class _NotificationsModalState extends State<NotificationsModal> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(8.r),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryAccent.withOpacity(0.12),
-                      shape: BoxShape.circle,
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(8.r),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryAccent.withOpacity(0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.notifications_active_rounded, color: AppColors.primaryAccent, size: 22.r),
                     ),
-                    child: Icon(Icons.notifications_active_rounded, color: AppColors.primaryAccent, size: 22.r),
-                  ),
-                  SizedBox(width: 10.w),
-                  Text('الإشعارات والرسائل', style: AppStyles.titleMedium),
-                ],
+                    SizedBox(width: 10.w),
+                    Expanded(
+                      child: Text(
+                        'الإشعارات والرسائل',
+                        style: AppStyles.titleMedium,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               IconButton(
                 icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),

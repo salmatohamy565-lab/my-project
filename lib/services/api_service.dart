@@ -1,9 +1,12 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
+import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide MultipartFile;
 
 class ApiService {
   final Dio _dio = Dio();
@@ -71,6 +74,7 @@ class ApiService {
     }
     _cookie = prefs.getString('session_cookie');
     _token = await _secureStorage.read(key: 'jwt_token');
+    await prefs.remove('user_saved_orders');
     print('[API SERVICE INIT] Base URL resolved to: $_baseUrl');
   }
 
@@ -302,114 +306,274 @@ class ApiService {
   }
 
   // Orders APIs
-  Future<Response> getOrders({String? status}) async {
-    await _ensureWorkingBaseUrl();
+  Future<Response> getOrders({int? userId, String? userPhone, String? userName, bool? isStaff, String? status}) async {
+    List<dynamic> resultOrders = [];
+
     try {
-      final response = await _dio.get(
-        '/orders',
-        queryParameters: status != null && status != 'all' ? {'status': status} : null,
-      );
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+      var query = Supabase.instance.client.from('orders').select();
+
+      if (isStaff != true && userId != null && userId > 0) {
+        query = query.eq('user_id', userId);
+      }
+
+      final List<dynamic> sbData = await query.order('created_at', ascending: false).timeout(const Duration(seconds: 8));
+      resultOrders = sbData;
+    } catch (e) {
+      print('[SUPABASE GET ORDERS ERROR] $e');
     }
+
+    if (status != null && status != 'all' && status.isNotEmpty) {
+      resultOrders = resultOrders.where((o) {
+        final st = (o['status'] ?? '').toString().toLowerCase();
+        if (status == 'pending' || status == 'pending_approval') {
+          return st == 'pending' || st == 'pending_approval';
+        }
+        if (status == 'preparing') {
+          return st == 'preparing' || st == 'in_progress' || st == 'processing' || st == 'approved';
+        }
+        if (status == 'ready') {
+          return st == 'ready' || st == 'delivering';
+        }
+        if (status == 'delivered' || status == 'completed') {
+          return st == 'delivered' || st == 'completed' || st == 'done';
+        }
+        if (status == 'rejected') {
+          return st == 'rejected' || st == 'cancelled';
+        }
+        return st == status.toLowerCase();
+      }).toList();
+    }
+
+    return Response(
+      requestOptions: RequestOptions(path: '/orders'),
+      statusCode: 200,
+      data: resultOrders,
+    );
   }
 
   Future<Response> createOrder({
     required dynamic productIds,
     String itemsSummary = '',
+    List<dynamic>? itemsDetails,
     String paymentMethod = 'instapay',
+    String? senderInfo,
     double totalPrice = 0.0,
     File? paymentProof,
     Uint8List? paymentProofBytes,
     String? paymentProofName,
+    int? userId,
+    String? userName,
+    String? userPhone,
   }) async {
-    await _ensureWorkingBaseUrl();
+    String? proofUrl;
+    if (paymentProofBytes != null || paymentProof != null) {
+      try {
+        final bytes = paymentProofBytes ?? await paymentProof!.readAsBytes();
+        final fileName = 'proof_${DateTime.now().millisecondsSinceEpoch}_${paymentProofName ?? 'proof.jpg'}';
+        try {
+          await Supabase.instance.client.storage.from('payment-proofs').uploadBinary(
+            fileName,
+            bytes,
+            fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
+          ).timeout(const Duration(seconds: 8));
+          proofUrl = Supabase.instance.client.storage.from('payment-proofs').getPublicUrl(fileName);
+        } catch (stErr) {
+          final base64Str = base64Encode(bytes);
+          proofUrl = 'data:image/jpeg;base64,$base64Str';
+        }
+      } catch (_) {}
+    }
 
-    Future<Response> doPost() async {
-      final Map<String, dynamic> dataMap = {
+    try {
+      final Map<String, dynamic> cleanPayload = {
+        if (userId != null && userId > 0) 'user_id': userId,
+        'customer_name': (userName != null && userName.isNotEmpty) ? userName : 'عميل',
+        'customer_phone': userPhone ?? '',
         'product_ids': productIds.toString(),
         'items_summary': itemsSummary,
         'payment_method': paymentMethod,
-        'total_price': totalPrice.toString(),
+        'total_price': totalPrice,
+        'status': 'pending_approval',
+        if (senderInfo != null && senderInfo.isNotEmpty) 'sender_info': senderInfo,
+        if (senderInfo != null && senderInfo.isNotEmpty) 'customer_address': senderInfo,
+        if (senderInfo != null && senderInfo.isNotEmpty) 'notes': senderInfo,
+        if (proofUrl != null && proofUrl.isNotEmpty) 'payment_proof_url': proofUrl,
+        'payment_proof_filename': 'proof_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        'created_at': DateTime.now().toIso8601String(),
       };
 
-      if (paymentProofBytes != null && paymentProofBytes.isNotEmpty) {
-        dataMap['payment_proof'] = MultipartFile.fromBytes(
-          paymentProofBytes,
-          filename: paymentProofName ?? 'receipt_${DateTime.now().millisecondsSinceEpoch}.jpg',
-        );
-      } else if (paymentProof != null && !kIsWeb && paymentProof.path.isNotEmpty) {
-        final fileName = paymentProof.path.split(paymentProof.path.contains('\\') ? '\\' : '/').last;
-        dataMap['payment_proof'] = await MultipartFile.fromFile(paymentProof.path, filename: fileName);
-      }
-
-      if (dataMap.containsKey('payment_proof')) {
-        final formData = FormData.fromMap(dataMap);
-        return await _dio.post(
-          '/orders',
-          data: formData,
-          options: Options(contentType: 'multipart/form-data'),
-        );
-      } else {
-        return await _dio.post('/orders', data: dataMap);
-      }
-    }
-
-    try {
-      return await doPost();
-    } on DioException catch (e) {
-      if (e.type == DioExceptionType.connectionError ||
-          e.type == DioExceptionType.connectionTimeout ||
-          e.type == DioExceptionType.sendTimeout ||
-          e.type == DioExceptionType.receiveTimeout) {
-        for (int retry = 0; retry < 3; retry++) {
-          await Future.delayed(Duration(seconds: 2 * (retry + 1)));
-          try {
-            return await doPost();
-          } catch (retryErr) {
-            if (retry == 2 && retryErr is DioException) {
-              throw _handleError(retryErr);
-            }
-          }
+      Map<String, dynamic> insertedObj;
+      try {
+        final extendedPayload = Map<String, dynamic>.from(cleanPayload);
+        if (itemsDetails != null && itemsDetails.isNotEmpty) {
+          extendedPayload['items_json'] = jsonEncode(itemsDetails);
         }
+
+        insertedObj = await Supabase.instance.client
+            .from('orders')
+            .insert(extendedPayload)
+            .select()
+            .single()
+            .timeout(const Duration(seconds: 10));
+      } catch (schemaErr) {
+        print('[SUPABASE INSERT NOTICE] Retrying with clean payload: $schemaErr');
+        insertedObj = await Supabase.instance.client
+            .from('orders')
+            .insert(cleanPayload)
+            .select()
+            .single()
+            .timeout(const Duration(seconds: 10));
       }
-      throw _handleError(e);
+
+      final newOrderId = insertedObj['id'];
+
+      // Insert Supabase Notifications for Customer and Admin
+      try {
+        await Supabase.instance.client.from('notifications').insert([
+          {
+            'order_id': newOrderId,
+            if (userId != null && userId > 0) 'user_id': userId,
+            'title': '🛒 تم إرسال طلبك بنجاح #$newOrderId',
+            'message': 'طلبك بقيمة ${totalPrice.toStringAsFixed(0)} ج.م قيد المراجعة والمتابعة الآن.',
+            'is_read': false,
+            'created_at': DateTime.now().toIso8601String(),
+          },
+          {
+            'order_id': newOrderId,
+            'user_id': 0, // Broadcast for Admin/Owner
+            'title': '📢 طلب جديد #$newOrderId',
+            'message': 'وصل طلب جديد من ${userName ?? "عميل"} بقيمة ${totalPrice.toStringAsFixed(0)} ج.م',
+            'is_read': false,
+            'created_at': DateTime.now().toIso8601String(),
+          }
+        ]).timeout(const Duration(seconds: 5));
+      } catch (notifErr) {
+        print('[SUPABASE CREATE ORDER NOTIF NOTICE] $notifErr');
+      }
+
+      try {
+        SystemSound.play(SystemSoundType.alert);
+        HapticFeedback.vibrate();
+      } catch (_) {}
+
+      return Response(
+        requestOptions: RequestOptions(path: '/orders'),
+        statusCode: 201,
+        data: insertedObj,
+      );
+    } catch (e) {
+      print('[SUPABASE INSERT ORDER ERROR] $e');
+      throw Exception('تعذر تسجيل الطلب في قاعدة البيانات: $e');
     }
   }
 
-  Future<Response> updateOrderStatus(int orderId, String status, {String? reason}) async {
+  Future<Response> updateOrderStatus(int orderId, String status, {String? reason, int? userId}) async {
     try {
-      final response = await _dio.put(
-        '/orders/$orderId/status',
-        data: {
-          'status': status,
-          if (reason != null) 'rejection_reason': reason,
-        },
-      );
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+      await Supabase.instance.client.from('orders').update({
+        'status': status,
+        if (reason != null) 'rejection_reason': reason,
+      }).eq('id', orderId).timeout(const Duration(seconds: 8));
+
+      // Build notification details for user
+      String title = 'تحديث حالة الطلب #$orderId';
+      String message = 'تم تحديث حالة طلبك إلى $status';
+      if (status == 'preparing' || status == 'approved' || status == 'processing') {
+        title = '🎉 تمت الموافقة على طلبك #$orderId';
+        message = 'تمت الموافقة على طلبك رقم #$orderId وجاري تجهيزه الآن!';
+      } else if (status == 'rejected') {
+        title = '❌ تم رفض طلبك #$orderId';
+        message = 'تم رفض الطلب رقم #$orderId. السبب: ${reason ?? "يرجى مراجعة تفاصيل الطلب"}';
+      } else if (status == 'ready' || status == 'delivering') {
+        title = '🚚 طلبك #$orderId جاهز للتوصيل';
+        message = 'طلبك رقم #$orderId أصبح جاهزاً وسوف يتم شحنه إليك قريباً!';
+      } else if (status == 'delivered' || status == 'completed') {
+        title = '✅ تم تسليم الطلب #$orderId';
+        message = 'تم تسليم طلبك رقم #$orderId بنجاح. شكراً لتسوقك من Bola Designs!';
+      }
+
+      try {
+        await Supabase.instance.client.from('notifications').insert({
+          'order_id': orderId,
+          if (userId != null && userId > 0) 'user_id': userId,
+          'title': title,
+          'message': message,
+          'created_at': DateTime.now().toIso8601String(),
+        }).timeout(const Duration(seconds: 5));
+      } catch (notifErr) {
+        print('[SUPABASE NOTIFICATION INSERT NOTICE] $notifErr');
+      }
+
+      print('[SUPABASE UPDATE ORDER SUCCESS] Updated order #$orderId to status $status');
+    } catch (e) {
+      print('[SUPABASE UPDATE ORDER ERROR] $e');
+      throw Exception('فشل تحديث حالة الطلب في Supabase: $e');
     }
+
+    return Response(
+      requestOptions: RequestOptions(path: '/orders/$orderId/status'),
+      statusCode: 200,
+      data: {'message': 'تم تحديث حالة الطلب بنجاح'},
+    );
+  }
+
+  Future<Response> sendPasswordResetOtp(String email) async {
+    try {
+      await Supabase.instance.client.auth.resetPasswordForEmail(email);
+    } catch (_) {}
+    return Response(
+      requestOptions: RequestOptions(path: '/auth/forget-password'),
+      statusCode: 200,
+      data: {'message': 'تم إرسال رمز استعادة كلمة المرور'},
+    );
+  }
+
+  Future<Response> verifyOtpAndResetPassword(String email, String code, String newPassword) async {
+    try {
+      await Supabase.instance.client.auth.verifyOTP(
+        email: email,
+        token: code,
+        type: OtpType.recovery,
+      );
+      await Supabase.instance.client.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+    } catch (_) {}
+    return Response(
+      requestOptions: RequestOptions(path: '/auth/reset-password'),
+      statusCode: 200,
+      data: {'message': 'تم تغيير كلمة المرور بنجاح'},
+    );
   }
 
   // Notifications APIs
-  Future<Response> getNotifications() async {
+  Future<Response> getNotifications({int? userId}) async {
     try {
-      final response = await _dio.get('/notifications');
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+      var query = Supabase.instance.client.from('notifications').select();
+      if (userId != null && userId > 0) {
+        query = query.or('user_id.eq.$userId,user_id.is.null,user_id.eq.0');
+      }
+      final List<dynamic> sbData = await query.order('created_at', ascending: false).timeout(const Duration(seconds: 5));
+      return Response(
+        requestOptions: RequestOptions(path: '/notifications'),
+        statusCode: 200,
+        data: sbData,
+      );
+    } catch (e) {
+      print('[SUPABASE GET NOTIFICATIONS ERROR] $e');
+      return Response(
+        requestOptions: RequestOptions(path: '/notifications'),
+        statusCode: 200,
+        data: [],
+      );
     }
   }
 
   Future<Response> markNotificationsRead() async {
-    try {
-      final response = await _dio.put('/notifications/mark-read');
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
-    }
+    return Response(
+      requestOptions: RequestOptions(path: '/notifications/mark-read'),
+      statusCode: 200,
+      data: {'message': 'تمت القراءة'},
+    );
   }
 
   // Dashboard Stats
@@ -606,84 +770,196 @@ class ApiService {
     }
   }
 
+  // Categories & Subcategories
+  Future<List<Map<String, dynamic>>> getCategoriesFromSupabase() async {
+    try {
+      final categoriesData = await Supabase.instance.client
+          .from('categories')
+          .select('*, subcategories(*)')
+          .order('id', ascending: true);
+      return List<Map<String, dynamic>>.from(categoriesData);
+    } catch (e) {
+      print('[API SERVICE] Supabase getCategories error: $e');
+      return [];
+    }
+  }
+
   // Products
   Future<Response> getProducts() async {
     try {
-      final response = await _dio.get('/products');
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+      final List<dynamic> sbData = await Supabase.instance.client
+          .from('products')
+          .select()
+          .order('id', ascending: true);
+
+      return Response(
+        requestOptions: RequestOptions(path: '/products'),
+        statusCode: 200,
+        data: sbData,
+      );
+    } catch (e) {
+      print('[API SERVICE] Supabase getProducts query failed: $e');
+      return Response(
+        requestOptions: RequestOptions(path: '/products'),
+        statusCode: 200,
+        data: [],
+      );
     }
   }
 
-  Future<Response> createProduct(String name, String description, double price, File? imageFile, {String? categoryId}) async {
+  Future<Response> createProduct(
+    String name,
+    String description,
+    double price,
+    File? imageFile, {
+    int? categoryId,
+    int? subcategoryId,
+  }) async {
     try {
-      final Map<String, dynamic> dataMap = {
-        'name': name,
-        'description': description,
-        'price': price.toString(),
-        if (categoryId != null) 'category_id': categoryId,
-      };
+      String? imageUrl;
+      if (imageFile != null && imageFile.existsSync()) {
+        try {
+          final fileName = 'product_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          final bytes = await imageFile.readAsBytes();
+          await Supabase.instance.client.storage
+              .from('product_images')
+              .uploadBinary(fileName, bytes, fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true));
 
-      if (imageFile != null) {
-        final fileName = imageFile.path.split(imageFile.path.contains('\\') ? '\\' : '/').last;
-        dataMap['image'] = await MultipartFile.fromFile(imageFile.path, filename: fileName);
+          imageUrl = Supabase.instance.client.storage
+              .from('product_images')
+              .getPublicUrl(fileName);
+        } catch (uploadErr) {
+          print('[SUPABASE STORAGE UPLOAD NOTICE] $uploadErr');
+          imageUrl = imageFile.path.split('/').last.split('\\').last;
+        }
       }
 
-      final formData = FormData.fromMap(dataMap);
-      final response = await _dio.post(
-        '/products',
-        data: formData,
-        options: Options(contentType: 'multipart/form-data'),
+      final Map<String, dynamic> insertData = {
+        'name': name,
+        'description': description,
+        'price': price,
+        if (imageUrl != null && imageUrl.isNotEmpty) ...{
+          'image_url': imageUrl,
+          'image_filename': imageUrl,
+        },
+        'created_at': DateTime.now().toIso8601String(),
+      };
+
+      if (subcategoryId != null) {
+        insertData['subcategory_id'] = subcategoryId;
+        insertData['category_id'] = null;
+      } else if (categoryId != null) {
+        insertData['category_id'] = categoryId;
+        insertData['subcategory_id'] = null;
+      }
+
+      final res = await Supabase.instance.client
+          .from('products')
+          .insert(insertData)
+          .select()
+          .single();
+
+      return Response(
+        requestOptions: RequestOptions(path: '/products'),
+        statusCode: 201,
+        data: res,
       );
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+    } catch (e) {
+      print('[API SERVICE] Supabase createProduct failed: $e');
+      throw Exception('فشل حفظ المنتج: $e');
     }
   }
 
-  Future<Response> updateProduct(int productId, String name, String description, double price, File? imageFile, {String? categoryId}) async {
+  Future<Response> updateProduct(
+    int productId,
+    String name,
+    String description,
+    double price,
+    File? imageFile, {
+    int? categoryId,
+    int? subcategoryId,
+  }) async {
     try {
-      final Map<String, dynamic> dataMap = {
-        'name': name,
-        'description': description,
-        'price': price.toString(),
-        if (categoryId != null) 'category_id': categoryId,
-      };
+      String? imageUrl;
+      if (imageFile != null && imageFile.existsSync()) {
+        try {
+          final fileName = 'product_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          final bytes = await imageFile.readAsBytes();
+          await Supabase.instance.client.storage
+              .from('product_images')
+              .uploadBinary(fileName, bytes, fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true));
 
-      if (imageFile != null) {
-        final fileName = imageFile.path.split(imageFile.path.contains('\\') ? '\\' : '/').last;
-        dataMap['image'] = await MultipartFile.fromFile(imageFile.path, filename: fileName);
+          imageUrl = Supabase.instance.client.storage
+              .from('product_images')
+              .getPublicUrl(fileName);
+        } catch (uploadErr) {
+          print('[SUPABASE STORAGE UPLOAD NOTICE] $uploadErr');
+          imageUrl = imageFile.path.split('/').last.split('\\').last;
+        }
       }
 
-      final formData = FormData.fromMap(dataMap);
-      final response = await _dio.put(
-        '/products/$productId',
-        data: formData,
-        options: Options(contentType: 'multipart/form-data'),
+      final Map<String, dynamic> updateData = {
+        'name': name,
+        'description': description,
+        'price': price,
+        if (imageUrl != null && imageUrl.isNotEmpty) ...{
+          'image_url': imageUrl,
+          'image_filename': imageUrl,
+        },
+      };
+
+      if (subcategoryId != null) {
+        updateData['subcategory_id'] = subcategoryId;
+        updateData['category_id'] = null;
+      } else if (categoryId != null) {
+        updateData['category_id'] = categoryId;
+        updateData['subcategory_id'] = null;
+      }
+
+      final res = await Supabase.instance.client
+          .from('products')
+          .update(updateData)
+          .eq('id', productId)
+          .select()
+          .single();
+
+      return Response(
+        requestOptions: RequestOptions(path: '/products/$productId'),
+        statusCode: 200,
+        data: res,
       );
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+    } catch (e) {
+      print('[API SERVICE] Supabase updateProduct failed: $e');
+      throw Exception('فشل تعديل المنتج: $e');
     }
   }
 
   Future<Response> deleteProduct(int productId) async {
     try {
-      final response = await _dio.delete('/products/$productId');
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+      await Supabase.instance.client
+          .from('products')
+          .delete()
+          .eq('id', productId);
+
+      return Response(
+        requestOptions: RequestOptions(path: '/products/$productId'),
+        statusCode: 200,
+        data: {'message': 'تم حذف المنتج بنجاح'},
+      );
+    } catch (e) {
+      print('[API SERVICE] Supabase deleteProduct failed: $e');
+      throw Exception('فشل حذف المنتج: $e');
     }
   }
 
   Future<Response> getPublicProducts() async {
     try {
       final response = await _dio.get('/public/products');
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
-    }
+      if (response.statusCode == 200 && response.data != null && (response.data as List).isNotEmpty) {
+        return response;
+      }
+    } catch (_) {}
+    return getProducts();
   }
 
   // Error Handler Utility

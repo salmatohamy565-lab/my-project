@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:provider/provider.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_styles.dart';
+import '../providers/auth_provider.dart';
 import '../utils/web_file_picker.dart';
 
 class PaymentMethodsModal extends StatefulWidget {
@@ -45,12 +47,35 @@ class PaymentMethodsModal extends StatefulWidget {
 class _PaymentMethodsModalState extends State<PaymentMethodsModal> {
   String _selectedMethod = 'vodafone_cash';
   final TextEditingController _senderInfoController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
   File? _proofFile;
   Uint8List? _proofBytes;
   String? _proofFileName;
+  bool _hasPhoneError = false;
+  String? _phoneErrorMsg;
+  bool _hasAddressError = false;
+  String? _addressErrorMsg;
+  bool _isSubmitting = false;
 
   final String _vodafoneCashNumber = '01001696249';
   final String _instapayNumber = '01228569626';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final authProvider = context.read<AuthProvider>();
+        final user = authProvider.currentUser;
+        if (user?.phone != null && user!.phone!.isNotEmpty) {
+          final clean = user.phone!.replaceAll(RegExp(r'[^\d]'), '');
+          if (clean.length == 11) {
+            _senderInfoController.text = clean;
+          }
+        }
+      }
+    });
+  }
 
   void _copyToClipboard(String text, String label) {
     Clipboard.setData(ClipboardData(text: text));
@@ -107,6 +132,7 @@ class _PaymentMethodsModalState extends State<PaymentMethodsModal> {
   @override
   void dispose() {
     _senderInfoController.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 
@@ -412,12 +438,18 @@ class _PaymentMethodsModalState extends State<PaymentMethodsModal> {
                         children: [
                           const Icon(Icons.cloud_upload_outlined, color: AppColors.primaryAccent),
                           SizedBox(width: 8.w),
-                          Text(
-                            'إضغط لإرفاق صورة إيصال التحويل (PNG, JPG حتى 5MB)',
-                            style: TextStyle(color: AppColors.textDefault, fontSize: 12.sp, fontWeight: FontWeight.w500),
+                          Expanded(
+                            child: Text(
+                              'إضغط لإرفاق صورة إيصال التحويل (PNG, JPG حتى 5MB)',
+                              style: TextStyle(color: AppColors.textDefault, fontSize: 11.sp, fontWeight: FontWeight.w500),
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ],
                       )
+
                     : Row(
                         children: [
                           ClipRRect(
@@ -472,54 +504,204 @@ class _PaymentMethodsModalState extends State<PaymentMethodsModal> {
 
             // Confirm Order Inputs (If in Order Mode)
             if (isOrderMode) ...[
-              Text('رقم المحفظة / الملاحظات المؤكدة للتحويل:', style: AppStyles.labelBold.copyWith(fontSize: 12.sp)),
+              Text('العنوان بالكامل للتوصيل (المحافظة / المدينة / الشارع):', style: AppStyles.labelBold.copyWith(fontSize: 12.sp)),
+              SizedBox(height: 6.h),
+              TextField(
+                controller: _addressController,
+                enabled: !_isSubmitting,
+                style: const TextStyle(color: AppColors.textMain),
+                maxLines: 2,
+                onChanged: (val) {
+                  if (_hasAddressError && val.trim().length >= 5) {
+                    setState(() {
+                      _hasAddressError = false;
+                      _addressErrorMsg = null;
+                    });
+                  }
+                },
+                decoration: InputDecoration(
+                  hintText: 'أدخل عنوانك التفصيلي للتوصيل (مثال: القاهرة / نصر / شارع 10)...',
+                  hintStyle: AppStyles.bodyMuted.copyWith(fontSize: 11.sp),
+                  prefixIcon: Icon(
+                    Icons.location_on_outlined,
+                    color: _hasAddressError ? Colors.red : AppColors.primaryAccent,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14.r),
+                    borderSide: BorderSide(
+                      color: _hasAddressError ? Colors.red : AppColors.borderLight,
+                      width: _hasAddressError ? 2.0 : 1.0,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14.r),
+                    borderSide: BorderSide(
+                      color: _hasAddressError ? Colors.red : AppColors.primaryAccent,
+                      width: 2.0,
+                    ),
+                  ),
+                  errorText: _hasAddressError ? _addressErrorMsg : null,
+                  errorStyle: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 11.sp),
+                ),
+              ),
+              SizedBox(height: 12.h),
+
+              Text('رقم المحفظة / رقم الهاتف المؤكد للتحويل (11 رقم بالضبط):', style: AppStyles.labelBold.copyWith(fontSize: 12.sp)),
               SizedBox(height: 6.h),
               TextField(
                 controller: _senderInfoController,
+                enabled: !_isSubmitting,
+                keyboardType: TextInputType.phone,
+                maxLength: 11,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(11),
+                ],
+                onChanged: (val) {
+                  final clean = val.replaceAll(RegExp(r'[^\d]'), '');
+                  if (_hasPhoneError && clean.length == 11) {
+                    setState(() {
+                      _hasPhoneError = false;
+                      _phoneErrorMsg = null;
+                    });
+                  }
+                },
                 style: const TextStyle(color: AppColors.textMain),
                 decoration: InputDecoration(
-                  hintText: 'أدخل رقمك الذي حولت منه للتأكيد...',
+                  hintText: 'أدخل رقمك مكون من 11 رقم (مثال: 01012345678)...',
                   hintStyle: AppStyles.bodyMuted.copyWith(fontSize: 12.sp),
-                  prefixIcon: const Icon(Icons.receipt_long, color: AppColors.textMuted),
+                  prefixIcon: Icon(
+                    Icons.phone_iphone_rounded,
+                    color: _hasPhoneError ? Colors.red : AppColors.primaryAccent,
+                  ),
+                  counterText: '',
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14.r),
+                    borderSide: BorderSide(
+                      color: _hasPhoneError ? Colors.red : AppColors.borderLight,
+                      width: _hasPhoneError ? 2.0 : 1.0,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14.r),
+                    borderSide: BorderSide(
+                      color: _hasPhoneError ? Colors.red : AppColors.primaryAccent,
+                      width: 2.0,
+                    ),
+                  ),
+                  errorText: _hasPhoneError ? _phoneErrorMsg : null,
+                  errorStyle: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 11.sp),
                 ),
               ),
               SizedBox(height: 18.h),
 
               ElevatedButton(
-                onPressed: () {
-                  final senderInfo = _senderInfoController.text.trim();
-                  final methodTitle = _selectedMethod == 'vodafone_cash' ? 'فودافون كاش' : 'انستاباي';
+                onPressed: _isSubmitting
+                    ? null
+                    : () async {
+                        final addressText = _addressController.text.trim();
+                        final phoneText = _senderInfoController.text.trim().replaceAll(RegExp(r'[^\d]'), '');
 
-                  if (widget.onConfirmOrder != null) {
-                    try {
-                      Function.apply(widget.onConfirmOrder!, [methodTitle, senderInfo, _proofFile, _proofBytes, _proofFileName]);
-                    } catch (_) {
-                      try {
-                        Function.apply(widget.onConfirmOrder!, [methodTitle, senderInfo, _proofFile]);
-                      } catch (_) {
-                        Function.apply(widget.onConfirmOrder!, [methodTitle, senderInfo]);
-                      }
-                    }
-                  }
-                  Navigator.of(context).pop();
-                },
+                        bool valid = true;
+
+                        if (addressText.isEmpty || addressText.length < 5) {
+                          setState(() {
+                            _hasAddressError = true;
+                            _addressErrorMsg = 'يرجى كتابة عنوان تفصيلي للتوصيل (5 حروف على الأقل)';
+                          });
+                          valid = false;
+                        }
+
+                        if (phoneText.length != 11 || !phoneText.startsWith('01')) {
+                          setState(() {
+                            _hasPhoneError = true;
+                            _phoneErrorMsg = 'يرجى كتابة رقم هاتف مصري صحيح مكون من 11 رقم يبدأ بـ 01';
+                          });
+                          valid = false;
+                        }
+
+                        if (_proofBytes == null && _proofFile == null) {
+                          _showError('⚠️ يرجى إرفاق صورة إيصال التحويل أولاً قبل إرسال الطلب');
+                          valid = false;
+                        }
+
+                        if (!valid) return;
+
+                        setState(() => _isSubmitting = true);
+
+                        final senderInfo = 'العنوان: $addressText • رقم التحويل: $phoneText';
+                        final methodTitle = _selectedMethod == 'vodafone_cash' ? 'فودافون كاش' : 'انستاباي';
+
+                        if (widget.onConfirmOrder != null) {
+                          try {
+                            dynamic result;
+                            try {
+                              result = await widget.onConfirmOrder!(methodTitle, senderInfo, _proofFile, _proofBytes, _proofFileName);
+                            } catch (_) {
+                              try {
+                                result = await widget.onConfirmOrder!(methodTitle, senderInfo, _proofFile);
+                              } catch (_) {
+                                result = await widget.onConfirmOrder!(methodTitle, senderInfo);
+                              }
+                            }
+
+                            if (mounted) {
+                              if (result == true) {
+                                Navigator.of(context).pop();
+                              } else {
+                                setState(() => _isSubmitting = false);
+                              }
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              setState(() => _isSubmitting = false);
+                              _showError('حدث خطأ أثناء إرسال الطلب: ${e.toString().replaceFirst('Exception: ', '')}');
+                            }
+                          }
+                        } else {
+                          if (mounted) {
+                            Navigator.of(context).pop();
+                          }
+                        }
+                      },
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.zero,
+                  disabledBackgroundColor: AppColors.primaryAccent.withOpacity(0.5),
                   shape: RoundedRectangleBorder(borderRadius: AppStyles.buttonRadius),
                 ),
                 child: Ink(
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: AppColors.primaryGradient),
+                    gradient: LinearGradient(
+                      colors: _isSubmitting
+                          ? [AppColors.primaryAccent.withOpacity(0.5), AppColors.secondaryAccent.withOpacity(0.5)]
+                          : AppColors.primaryGradient,
+                    ),
                     borderRadius: AppStyles.buttonRadius,
                     boxShadow: AppStyles.buttonShadow,
                   ),
                   child: Container(
                     padding: EdgeInsets.symmetric(vertical: 14.h),
                     alignment: Alignment.center,
-                    child: Text(
-                      'تأكيد إرسال الطلب وإيصال التحويل',
-                      style: AppStyles.labelBold.copyWith(color: Colors.white, fontSize: 15.sp),
-                    ),
+                    child: _isSubmitting
+                        ? Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 20.r,
+                                height: 20.r,
+                                child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                              ),
+                              SizedBox(width: 10.w),
+                              Text(
+                                'جاري تسجيل وتأكيد الطلب...',
+                                style: AppStyles.labelBold.copyWith(color: Colors.white, fontSize: 14.sp),
+                              ),
+                            ],
+                          )
+                        : Text(
+                            'تأكيد إرسال الطلب وإيصال التحويل',
+                            style: AppStyles.labelBold.copyWith(color: Colors.white, fontSize: 15.sp),
+                          ),
                   ),
                 ),
               ),

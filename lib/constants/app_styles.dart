@@ -6,43 +6,43 @@ import 'app_colors.dart';
 class AppStyles {
   // Headings
   static TextStyle titleLarge = GoogleFonts.cairo(
-    fontSize: 26.sp,
+    fontSize: 22.sp,
     fontWeight: FontWeight.w800,
     color: AppColors.textMain,
-    height: 1.3,
+    height: 1.25,
   );
 
   static TextStyle titleMedium = GoogleFonts.cairo(
-    fontSize: 18.sp,
+    fontSize: 15.sp,
     fontWeight: FontWeight.w700,
     color: AppColors.textMain,
-    height: 1.3,
+    height: 1.25,
   );
 
   static TextStyle titleSmall = GoogleFonts.cairo(
-    fontSize: 15.sp,
+    fontSize: 13.sp,
     fontWeight: FontWeight.w600,
     color: AppColors.textMain,
-    height: 1.3,
+    height: 1.25,
   );
 
   // Body Texts
   static TextStyle bodyDefault = GoogleFonts.cairo(
-    fontSize: 14.sp,
+    fontSize: 12.sp,
     fontWeight: FontWeight.w400,
     color: AppColors.textDefault,
-    height: 1.6,
+    height: 1.5,
   );
 
   static TextStyle bodyMuted = GoogleFonts.cairo(
-    fontSize: 12.sp,
+    fontSize: 10.sp,
     fontWeight: FontWeight.w400,
     color: AppColors.textMuted,
-    height: 1.6,
+    height: 1.5,
   );
 
   static TextStyle labelBold = GoogleFonts.cairo(
-    fontSize: 13.sp,
+    fontSize: 11.sp,
     fontWeight: FontWeight.w700,
     color: AppColors.textMain,
   );
@@ -79,7 +79,7 @@ class AppStyles {
   ];
 
   static TextStyle buttonText = GoogleFonts.cairo(
-    fontSize: 16.sp,
+    fontSize: 14.sp,
     fontWeight: FontWeight.w700,
     color: Colors.white,
   );

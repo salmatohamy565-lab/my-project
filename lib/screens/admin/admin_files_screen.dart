@@ -177,7 +177,11 @@ class _AdminFilesScreenState extends State<AdminFilesScreen> {
     final staffList = userProvider.users;
     final employeeFiles = userProvider.userFiles;
 
-    final supervisorsOnly = staffList.where((u) => u.role == 'employee' || u.role == 'supervisor').toList();
+    final supervisorsOnly = staffList.where((u) {
+      final r = u.role.toLowerCase();
+      final un = u.username.toLowerCase();
+      return r == 'employee' || r == 'admin' || r == 'owner' || r == 'supervisor' || un.startsWith('emp_') || un.startsWith('admin_');
+    }).toList();
 
     return Scaffold(
       key: _scaffoldKey,
@@ -243,18 +247,24 @@ class _AdminFilesScreenState extends State<AdminFilesScreen> {
                             Text('الموظف', style: AppStyles.labelBold),
                             SizedBox(height: 8.h),
                             DropdownButtonFormField<int>(
+                              isExpanded: true,
                               dropdownColor: Colors.white,
                               value: _selectedUserId,
                               style: TextStyle(color: Colors.black87, fontSize: 13.sp, fontWeight: FontWeight.bold),
                               decoration: const InputDecoration(
-                                hintText: '-- اختر موظف --',
+                                hintText: '-- اختر موظف أو أدمن --',
                               ),
                               items: supervisorsOnly.map((u) {
                                 return DropdownMenuItem<int>(
                                   value: u.id,
-                                  child: Text('👤 ${u.displayName} (@${u.username})', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
+                                  child: Text(
+                                    '👤 ${u.displayName} (@${u.username})',
+                                    style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 );
                               }).toList(),
+
                               onChanged: (val) {
                                 setState(() {
                                   _selectedUserId = val;

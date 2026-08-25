@@ -10,6 +10,8 @@ import '../../constants/app_styles.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/task_provider.dart';
+import '../../providers/order_provider.dart';
+import '../../providers/notification_provider.dart';
 import '../../widgets/radial_background.dart';
 import '../../widgets/custom_bottom_nav_bar.dart';
 import '../../widgets/app_logo_bar.dart';
@@ -104,12 +106,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Future<void> _loadData() async {
     final userProv = context.read<UserProvider>();
     final taskProv = context.read<TaskProvider>();
+    final orderProv = context.read<OrderProvider>();
+    final currentUser = context.read<AuthProvider>().currentUser;
     await Future.wait([
       userProv.fetchStats(),
       userProv.fetchUsers(),
       taskProv.fetchTasks(),
+      orderProv.fetchOrders(currentUser: currentUser),
+      context.read<NotificationProvider>().fetchNotifications(currentUser: currentUser),
     ]);
   }
+
 
   Future<void> _createNewUser() async {
     final username = _usernameController.text.trim();
@@ -284,7 +291,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final staffList = userProvider.users;
     final activeTasks = taskProvider.tasks;
 
-    final supervisorsOnly = staffList.where((u) => u.role == 'employee' || u.role == 'supervisor').toList();
+    final supervisorsOnly = staffList.where((u) {
+      final r = u.role.toLowerCase();
+      final un = u.username.toLowerCase();
+      return r == 'employee' || r == 'admin' || r == 'owner' || r == 'supervisor' || un.startsWith('emp_') || un.startsWith('admin_');
+    }).toList();
+
 
     return Scaffold(
       key: _scaffoldKey,
@@ -937,26 +949,31 @@ class _AdminDashboardState extends State<AdminDashboard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(8.r),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryAccent.withOpacity(0.08),
-                      shape: BoxShape.circle,
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(8.r),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryAccent.withOpacity(0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.receipt, color: AppColors.primaryAccent, size: 20.r),
                     ),
-                    child: Icon(Icons.receipt, color: AppColors.primaryAccent, size: 20.r),
-                  ),
-                  SizedBox(width: 10.w),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(proof['user_name'], style: AppStyles.labelBold.copyWith(fontSize: 14.sp)),
-                      Text('${proof['id']} | ${proof['payment_method']}', style: TextStyle(color: AppColors.textMuted, fontSize: 11.sp)),
-                    ],
-                  ),
-                ],
+                    SizedBox(width: 10.w),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(proof['user_name'], style: AppStyles.labelBold.copyWith(fontSize: 14.sp), overflow: TextOverflow.ellipsis),
+                          Text('${proof['id']} | ${proof['payment_method']}', style: TextStyle(color: AppColors.textMuted, fontSize: 11.sp), overflow: TextOverflow.ellipsis),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              SizedBox(width: 8.w),
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
                 decoration: BoxDecoration(
@@ -978,14 +995,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('المبلغ: ${proof['amount']}', style: TextStyle(color: AppColors.primaryAccent, fontWeight: FontWeight.bold, fontSize: 13.sp)),
-                  Text('رقم المحول: ${proof['sender_phone']}', style: TextStyle(color: AppColors.textMuted, fontSize: 11.sp)),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('المبلغ: ${proof['amount']}', style: TextStyle(color: AppColors.primaryAccent, fontWeight: FontWeight.bold, fontSize: 13.sp), overflow: TextOverflow.ellipsis),
+                    Text('رقم المحول: ${proof['sender_phone']}', style: TextStyle(color: AppColors.textMuted, fontSize: 11.sp), overflow: TextOverflow.ellipsis),
+                  ],
+                ),
               ),
+              SizedBox(width: 8.w),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   // Full Image Proof Screenshot Viewer Button
                   ElevatedButton.icon(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_styles.dart';
 import '../../providers/auth_provider.dart';
@@ -43,7 +44,7 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
 
   void _handleSendCode() async {
     final email = _emailController.text.trim();
-    print('[FORGET PASSWORD UI BUTTON] User clicked Send Code with email: $email');
+    print('[FORGET PASSWORD UI BUTTON] User clicked Send Code via Supabase Auth for email: $email');
     if (email.isEmpty || !email.contains('@')) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('يرجى إدخال بريد إلكتروني صحيح')),
@@ -52,25 +53,21 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
     }
 
     final authProvider = context.read<AuthProvider>();
-    final code = await authProvider.forgetPassword(email);
+    final result = await authProvider.forgetPassword(email);
 
-    if (mounted && code != null) {
+    if (mounted && result != null) {
       setState(() {
         _codeSent = true;
-        if (code != 'OK') {
-          _demoCode = code;
-          _codeController.text = code;
-        }
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('✓ تم إرسال كود الاستعادة بنجاح إلى بريدك الإلكتروني! يرجى فحص البريد (Inbox / Spam).'),
+          content: Text('✓ تم إرسال كود OTP بنجاح إلى بريدك الإلكتروني عبر Supabase Auth! يرجى فحص البريد (Inbox / Spam).'),
           backgroundColor: AppColors.emeraldGreen,
           duration: Duration(seconds: 5),
         ),
       );
     } else if (mounted) {
-      final error = authProvider.errorMessage ?? 'فشل إرسال كود الاستعادة. يرجى التحقق من الاتصال بالسيرفر والبريد الإلكتروني.';
+      final error = authProvider.errorMessage ?? 'فشل إرسال كود الاستعادة. يرجى التحقق من البريد الإلكتروني والإعدادات.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('✕ $error'),
@@ -99,11 +96,21 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('تمت إعادة تعيين كلمة السر بنجاح! يمكنك الدخول الآن.'),
+          content: Text('تمت التحقق وإعادة تعيين كلمة السر بنجاح via Supabase! تم تسجيل دخولك بنفس الحساب والبيانات.'),
           backgroundColor: AppColors.emeraldGreen,
+          duration: Duration(seconds: 5),
         ),
       );
       Navigator.of(context).pop();
+    } else if (mounted) {
+      final error = authProvider.errorMessage ?? 'فشل التحقق من الكود أو إعادة التعيين.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✕ $error'),
+          backgroundColor: Colors.redAccent,
+          duration: const Duration(seconds: 5),
+        ),
+      );
     }
   }
 

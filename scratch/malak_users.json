@@ -1,0 +1,100 @@
+[
+  {
+    "id": 106,
+    "username": "malakmoatasem30",
+    "email": "malakmoatasem30@gmail.com",
+    "phone": "01272781686",
+    "role": "customer"
+  },
+  {
+    "id": 143,
+    "username": "malak Moatasem Rady",
+    "email": "malak_moatasem_rady@gmail.com",
+    "phone": "012222222222",
+    "role": "customer"
+  },
+  {
+    "id": 145,
+    "username": "malak moatasem rady",
+    "email": "malak_moatasem_rady@gmail.com",
+    "phone": "0125794653",
+    "role": "customer"
+  },
+  {
+    "id": 163,
+    "username": "malak rady mo",
+    "email": "malak_rady_mo@gmail.com",
+    "phone": "01271122860",
+    "role": "customer"
+  },
+  {
+    "id": 165,
+    "username": "malak rady you",
+    "email": "malak_rady_you@gmail.com",
+    "phone": "",
+    "role": "customer"
+  },
+  {
+    "id": 147,
+    "username": "salma malak ea",
+    "email": "salma_malak_ea@gmail.com",
+    "phone": "8888",
+    "role": "customer"
+  },
+  {
+    "id": 173,
+    "username": "malak rady is",
+    "email": "malak_rady_is@gmail.com",
+    "phone": "01271122800",
+    "role": "customer"
+  },
+  {
+    "id": 135,
+    "username": "emp_malak_101",
+    "email": "emp.malak.101@boladesigns.com",
+    "phone": "01100000101",
+    "role": "employee"
+  },
+  {
+    "id": 116,
+    "username": "malakmoatasem0",
+    "email": "malakmoatasem0@gmail.com",
+    "phone": "01271122860",
+    "role": "customer"
+  },
+  {
+    "id": 140,
+    "username": "malak",
+    "email": "malak@boladesigns.com",
+    "phone": "#646646",
+    "role": "employee"
+  },
+  {
+    "id": 115,
+    "username": "malakanti332",
+    "email": "malakanti332@gmail.com",
+    "phone": "01271122860",
+    "role": "customer"
+  },
+  {
+    "id": 144,
+    "username": "Moatasem Rady malak",
+    "email": "moatasem_rady_malak@gmail.com",
+    "phone": "0127745558",
+    "role": "customer"
+  },
+  {
+    "id": 164,
+    "username": "malak salma malak",
+    "email": "malak_salma_malak@gmail.com",
+    "phone": "01271122890",
+    "role": "customer"
+  },
+  {
+    "id": 128,
+    "username": "Malak",
+    "email": "malak@boladesigns.com",
+    "phone": "01274445565",
+    "role": "employee"
+  }
+]

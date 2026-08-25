@@ -11,6 +11,8 @@ import '../../widgets/app_logo_bar.dart';
 import '../../widgets/animations.dart';
 import '../../widgets/payment_methods_modal.dart';
 import '../../widgets/product_image_widget.dart';
+import '../../widgets/product_details_modal.dart';
+import '../../providers/order_provider.dart';
 import '../login_screen.dart';
 
 class PublicCatalogScreen extends StatefulWidget {
@@ -288,60 +290,68 @@ class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  ProductImageWidget(
-                                    imageUrl: p.imageUrl,
-                                    baseUrl: authProvider.baseUrl,
-                                    height: 160.h,
-                                    fit: BoxFit.cover,
-                                    borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
-                                  ),
-                                  Padding(
-                                    padding: EdgeInsets.all(16.w),
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  GestureDetector(
+                                    onTap: () => ProductDetailsModal.show(context, p),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
                                       children: [
-                                        Expanded(
-                                          child: Column(
+                                        ProductImageWidget(
+                                          imageUrl: p.imageUrl,
+                                          baseUrl: authProvider.baseUrl,
+                                          height: 160.h,
+                                          fit: BoxFit.contain,
+                                          borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+                                        ),
+                                        Padding(
+                                          padding: EdgeInsets.all(16.w),
+                                          child: Row(
                                             crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                             children: [
-                                              Text(
-                                                p.name,
-                                                style: AppStyles.titleMedium.copyWith(
-                                                  fontSize: 16.sp,
-                                                  color: AppColors.textMain,
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      p.name,
+                                                      style: AppStyles.titleMedium.copyWith(
+                                                        fontSize: 16.sp,
+                                                        color: AppColors.textMain,
+                                                      ),
+                                                    ),
+                                                    SizedBox(height: 6.h),
+                                                    Text(
+                                                      p.description.isEmpty ? 'انقر للاطلاع على المواصفات والوصف الكامل' : p.description,
+                                                      style: AppStyles.bodyMuted,
+                                                      maxLines: 2,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                              SizedBox(height: 6.h),
-                                              Text(
-                                                p.description.isEmpty ? 'بدون وصف' : p.description,
-                                                style: AppStyles.bodyMuted,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
+                                              SizedBox(width: 12.w),
+                                              Container(
+                                                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                                                decoration: BoxDecoration(
+                                                  gradient: const LinearGradient(colors: AppColors.primaryGradient),
+                                                  borderRadius: BorderRadius.circular(12.r),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black.withOpacity(0.08),
+                                                      blurRadius: 6,
+                                                      offset: const Offset(0, 2),
+                                                    ),
+                                                  ],
+                                                ),
+                                                 child: Text(
+                                                   p.price <= 0 ? 'تواصل معنا' : '${p.price.toStringAsFixed(0)} ج.م',
+                                                  style: AppStyles.labelBold.copyWith(
+                                                    color: Colors.white,
+                                                    fontSize: 13.sp,
+                                                  ),
+                                                ),
                                               ),
                                             ],
-                                          ),
-                                        ),
-                                        SizedBox(width: 12.w),
-                                        Container(
-                                          padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-                                          decoration: BoxDecoration(
-                                            gradient: const LinearGradient(colors: AppColors.primaryGradient),
-                                            borderRadius: BorderRadius.circular(12.r),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withOpacity(0.08),
-                                                blurRadius: 6,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: Text(
-                                            '${p.price.toStringAsFixed(2)} ج.م',
-                                            style: AppStyles.labelBold.copyWith(
-                                              color: Colors.white,
-                                              fontSize: 13.sp,
-                                            ),
                                           ),
                                         ),
                                       ],
@@ -350,33 +360,113 @@ class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
                                   const Divider(color: AppColors.borderLight, height: 16),
                                   Padding(
                                     padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 16.w),
-                                    child: SizedBox(
-                                      width: double.infinity,
-                                      child: ElevatedButton.icon(
-                                        onPressed: () {
-                                          PaymentMethodsModal.show(
-                                            context,
-                                            productName: p.name,
-                                            productPrice: p.price,
-                                            onConfirmOrder: (methodTitle, senderInfo, [proofFile]) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(
-                                                  content: Text('✓ تم استلام طلبك لـ "${p.name}" عبر $methodTitle بنجاح!', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                                  backgroundColor: AppColors.successStart,
-                                                ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: () => ProductDetailsModal.show(context, p),
+                                            icon: const Icon(Icons.info_outline_rounded, size: 16),
+                                            label: Text('المواصفات 🔍', style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.bold)),
+                                            style: OutlinedButton.styleFrom(
+                                              padding: EdgeInsets.symmetric(vertical: 8.h),
+                                              side: BorderSide(color: AppColors.primaryAccent.withOpacity(0.4)),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(width: 8.w),
+                                        Expanded(
+                                          flex: 2,
+                                          child: ElevatedButton.icon(
+                                            onPressed: () {
+                                              PaymentMethodsModal.show(
+                                                context,
+                                                productName: p.name,
+                                                productPrice: p.price,
+                                                onConfirmOrder: (methodTitle, senderInfo, [proofFile, proofBytes, proofFileName]) async {
+                                                  try {
+                                                    final authProvider = context.read<AuthProvider>();
+                                                    final user = authProvider.currentUser;
+
+                                                    final newOrderId = DateTime.now().millisecondsSinceEpoch % 100000;
+                                                    final localOrder = OrderModel(
+                                                      id: newOrderId,
+                                                      userId: user?.id ?? 0,
+                                                      customerName: user?.displayName ?? user?.name ?? user?.username ?? 'عميل',
+                                                      customerPhone: user?.phone ?? '01000000000',
+                                                      productIds: p.id.toString(),
+                                                      itemsSummary: '${p.name} x1',
+                                                      products: [p],
+                                                      status: 'pending_approval',
+                                                      totalPrice: p.price,
+                                                      paymentMethod: methodTitle,
+                                                      createdAt: DateTime.now(),
+                                                    );
+                                                    if (context.mounted) {
+                                                      context.read<OrderProvider>().addLocalOrder(localOrder);
+                                                    }
+
+                                                    final itemsDetails = [
+                                                      {
+                                                        'id': p.id,
+                                                        'name': p.name,
+                                                        'price': p.price,
+                                                        'quantity': 1,
+                                                        'image_url': p.imageUrl ?? '',
+                                                        'description': p.description,
+                                                      }
+                                                    ];
+
+                                                    await ApiService().createOrder(
+                                                      productIds: p.id,
+                                                      itemsSummary: '${p.name} x1',
+                                                      itemsDetails: itemsDetails,
+                                                      paymentMethod: methodTitle,
+                                                      senderInfo: senderInfo,
+                                                      totalPrice: p.price,
+                                                      paymentProof: proofFile,
+                                                      paymentProofBytes: proofBytes,
+                                                      paymentProofName: proofFileName,
+                                                      userId: user?.id,
+                                                      userName: user?.name ?? user?.username,
+                                                      userPhone: user?.phone,
+                                                    );
+
+                                                    if (context.mounted) {
+                                                      context.read<CartProvider>().clearCart();
+                                                      context.read<OrderProvider>().fetchOrders(currentUser: user);
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        SnackBar(
+                                                          content: Text('🎉 تم إرسال الطلب لـ "${p.name}" بنجاح! بانتظار موافقة الأدمن.', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                                          backgroundColor: AppColors.successStart,
+                                                          duration: const Duration(seconds: 4),
+                                                        ),
+                                                      );
+                                                    }
+                                                  } catch (e) {
+                                                    if (context.mounted) {
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        SnackBar(
+                                                          content: Text('حدث خطأ أثناء إرسال الطلب: $e', textAlign: TextAlign.center),
+                                                          backgroundColor: AppColors.dangerStart,
+                                                        ),
+                                                      );
+                                                    }
+                                                  }
+                                                },
                                               );
                                             },
-                                          );
-                                        },
-                                        icon: const Icon(Icons.shopping_cart_checkout, color: Colors.white, size: 16),
-                                        label: Text('طلب ودفع (كاش/انستاباي)', style: AppStyles.labelBold.copyWith(color: Colors.white, fontSize: 12.sp)),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: AppColors.secondaryAccent,
-                                          elevation: 2,
-                                          padding: EdgeInsets.symmetric(vertical: 8.h),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                                            icon: const Icon(Icons.shopping_cart_checkout, color: Colors.white, size: 16),
+                                            label: Text('طلب ودفع', style: AppStyles.labelBold.copyWith(color: Colors.white, fontSize: 12.sp)),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: AppColors.secondaryAccent,
+                                              elevation: 2,
+                                              padding: EdgeInsets.symmetric(vertical: 8.h),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                                            ),
+                                          ),
                                         ),
-                                      ),
+                                      ],
                                     ),
                                   ),
                                 ],
