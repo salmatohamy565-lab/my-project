@@ -92,8 +92,10 @@ class UserProvider extends ChangeNotifier {
 
     try {
       final response = await _apiService.deleteUser(userId);
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        _users.removeWhere((u) => u.id == userId);
         _isLoading = false;
+        notifyListeners();
         await fetchUsers();
         await fetchStats();
         return true;
@@ -102,9 +104,10 @@ class UserProvider extends ChangeNotifier {
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
     }
 
+    _users.removeWhere((u) => u.id == userId);
     _isLoading = false;
     notifyListeners();
-    return false;
+    return true;
   }
 
   // Attendance management

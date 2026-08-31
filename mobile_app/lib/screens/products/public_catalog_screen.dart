@@ -1,57 +1,28 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_styles.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/product_provider.dart';
+import '../../widgets/radial_background.dart';
+import '../../widgets/app_logo_bar.dart';
+import '../../widgets/animations.dart';
+import '../../widgets/payment_methods_modal.dart';
+import '../../widgets/product_image_widget.dart';
+import '../../widgets/product_details_modal.dart';
+import '../../providers/order_provider.dart';
 import '../login_screen.dart';
 
-class CategoryItem {
-  final String id;
-  final String title;
-  final String? subtitle;
-  final IconData icon;
-
-  const CategoryItem({
-    required this.id,
-    required this.title,
-    this.subtitle,
-    required this.icon,
-  });
-}
-
 class PublicCatalogScreen extends StatefulWidget {
-  final String? userName;
-  const PublicCatalogScreen({super.key, this.userName});
+  const PublicCatalogScreen({super.key});
 
   @override
   State<PublicCatalogScreen> createState() => _PublicCatalogScreenState();
 }
 
 class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
-  int _selectedNavIndex = 1; // 0: Account, 1: Home, 2: Cart
-  String _selectedCategoryId = 'papers'; // Default selected item matching screenshot
-
-  final List<CategoryItem> _categories = const [
-    CategoryItem(id: 'mugs', title: 'مجات', icon: Icons.coffee_outlined),
-    CategoryItem(id: 'frames', title: 'براويز', icon: Icons.crop_original_outlined),
-    CategoryItem(id: 'wedding_supplies', title: 'مستلزمات افراح', icon: Icons.favorite_outline),
-    CategoryItem(id: 'medals', title: 'ميداليات', icon: Icons.military_tech_outlined),
-    CategoryItem(id: 'certificates', title: 'شهادات', icon: Icons.gavel_rounded),
-    CategoryItem(id: 'tablohat', title: 'تابلوهات', icon: Icons.photo_size_select_actual_outlined),
-    CategoryItem(id: 'trophies', title: 'دروع', icon: Icons.emoji_events_outlined),
-    CategoryItem(id: 'tshirts', title: 'تيشرتات', icon: Icons.person_outline),
-    CategoryItem(id: 'wallets', title: 'محافظ', icon: Icons.account_balance_wallet_outlined),
-    CategoryItem(id: 'flags', title: 'اعلام', icon: Icons.flag_outlined),
-    CategoryItem(id: 'desk_stand', title: 'ستاند مكتب', icon: Icons.desktop_windows_outlined),
-    CategoryItem(id: 'pens', title: 'اقلام', icon: Icons.edit_outlined),
-    CategoryItem(id: 'papers', title: 'ورقيات', subtitle: '4 فئات فرعية', icon: Icons.description_outlined),
-    CategoryItem(id: 'wedding_cards', title: 'كروت افراح', icon: Icons.style_outlined),
-    CategoryItem(id: 'stamps', title: 'اختام', icon: Icons.article_outlined),
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -65,440 +36,452 @@ class _PublicCatalogScreenState extends State<PublicCatalogScreen> {
     final authProvider = context.watch<AuthProvider>();
     final productProvider = context.watch<ProductProvider>();
     final publicProducts = productProvider.publicProducts;
-    final currentUser = authProvider.currentUser;
-
-    final displayName = widget.userName ?? currentUser?.username ?? 'malakmoatasem0008780';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F8),
-      body: SafeArea(
-        child: Stack(
+      body: RadialBackground(
+        child: Column(
           children: [
-            Column(
-              children: [
-                // ── Top Header Bar ──
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-                  color: Colors.white,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Left: User Info
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const LoginScreen()),
-                          );
-                        },
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 38.r,
-                              height: 38.r,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFE2E8F0),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.person, color: Colors.black87),
+            // Unified App Logo Bar with single glassmorphic Login button
+            AppLogoBar(
+              trailing: GestureDetector(
+                onTap: () {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (route) => false,
+                  );
+                },
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14.r),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 28.w, vertical: 11.h),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryAccent.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(14.r),
+                        border: Border.all(
+                          color: AppColors.primaryAccent.withOpacity(0.25),
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.login_rounded,
+                            color: AppColors.textMain,
+                            size: 20.sp,
+                          ),
+                          SizedBox(width: 10.w),
+                          Text(
+                            'تسجيل الدخول',
+                            style: AppStyles.labelBold.copyWith(
+                              color: AppColors.textMain,
+                              fontSize: 14.sp,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.3,
                             ),
-                            SizedBox(width: 8.w),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Scrollable Content
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () => context.read<ProductProvider>().fetchPublicProducts(),
+                color: AppColors.primaryAccent,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 20.h),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Header Section
+                      AnimatedEntrance(
+                        delay: const Duration(milliseconds: 50),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('معرض المنتجات', style: AppStyles.titleLarge),
+                            SizedBox(height: 4.h),
                             Text(
-                              displayName,
-                              style: AppStyles.labelBold.copyWith(
-                                fontSize: 13.sp,
-                                color: Colors.black87,
-                              ),
+                              'تصفح منتجاتنا وأسعارنا بكل حرية',
+                              style: AppStyles.bodyMuted,
                             ),
                           ],
                         ),
                       ),
+                      SizedBox(height: 20.h),
 
-                      // Right: Logo
-                      Row(
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                'FOR ADVERTISING',
-                                style: TextStyle(
-                                  fontSize: 7.sp,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5,
-                                ),
+                      // Light Glassmorphism Brand Hero Card (Light & Soft for Eyes)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(24.r),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                          child: Container(
+                            padding: EdgeInsets.all(20.w),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.85),
+                              border: Border.all(
+                                color: const Color(0xFFE2E8F0),
+                                width: 1.5,
                               ),
-                              Text(
-                                'BOLA DESIGNS',
-                                style: TextStyle(
-                                  fontSize: 11.sp,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.5,
+                              borderRadius: BorderRadius.circular(24.r),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.04),
+                                  blurRadius: 20.r,
+                                  offset: const Offset(0, 6),
                                 ),
-                              ),
-                              Text(
-                                '01222856926',
-                                style: TextStyle(
-                                  fontSize: 7.sp,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(width: 6.w),
-                          Image.asset(
-                            'assets/bola_logo.png',
-                            width: 32.w,
-                            height: 32.w,
-                            errorBuilder: (context, error, stackTrace) => const Icon(
-                              Icons.palette_outlined,
-                              size: 28,
-                              color: Colors.black,
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                // ── Main Content Area ──
-                Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: () => context.read<ProductProvider>().fetchPublicProducts(),
-                    color: AppColors.primaryAccent,
-                    child: SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Categories Grid (3 Columns)
-                          GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: _categories.length,
-                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              crossAxisSpacing: 10.w,
-                              mainAxisSpacing: 10.h,
-                              childAspectRatio: 0.76,
-                            ),
-                            itemBuilder: (context, index) {
-                              final cat = _categories[index];
-                              final isSelected = cat.id == _selectedCategoryId;
-
-                              return GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _selectedCategoryId = cat.id;
-                                  });
-                                },
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(18.r),
-                                    border: Border.all(
-                                      color: isSelected ? Colors.black : Colors.transparent,
-                                      width: isSelected ? 2 : 0,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.04),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 3),
-                                      ),
-                                    ],
-                                  ),
-                                  padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 8.h),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      // Category Icon Box
-                                      Container(
-                                        width: 46.r,
-                                        height: 46.r,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFF1F5F9),
-                                          borderRadius: BorderRadius.circular(14.r),
-                                        ),
-                                        child: Icon(
-                                          cat.icon,
-                                          size: 22.sp,
-                                          color: Colors.black87,
-                                        ),
-                                      ),
-                                      SizedBox(height: 6.h),
-                                      FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        child: Text(
-                                          cat.title,
-                                          style: AppStyles.labelBold.copyWith(
-                                            fontSize: 12.sp,
-                                            color: Colors.black87,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ),
-                                      if (cat.subtitle != null) ...[
-                                        SizedBox(height: 2.h),
-                                        FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          child: Text(
-                                            cat.subtitle!,
-                                            style: AppStyles.bodyMuted.copyWith(
-                                              fontSize: 9.sp,
-                                              color: Colors.grey.shade600,
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-
-                          SizedBox(height: 24.h),
-
-                          // Best Sellers Title Section
-                          Text(
-                            'Best sellers',
-                            style: TextStyle(
-                              fontSize: 20.sp,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          SizedBox(height: 14.h),
-
-                          // Best Sellers Products Horizontal List
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
+                            child: Column(
                               children: [
-                                _buildSampleBestSellerCard(
-                                  title: 'ورقيات ممتازة',
-                                  price: '150 ج.م',
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.all(10.w),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.inputBg,
+                                        borderRadius: BorderRadius.circular(18.r),
+                                        border: Border.all(
+                                          color: AppColors.borderLight,
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: SvgPicture.asset(
+                                        'assets/logo.svg',
+                                        width: 44.w,
+                                        height: 44.w,
+                                      ),
+                                    ),
+                                    SizedBox(width: 14.w),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Bola Designs',
+                                            style: AppStyles.titleMedium.copyWith(
+                                              fontSize: 18.sp,
+                                              color: AppColors.textMain,
+                                            ),
+                                          ),
+                                          SizedBox(height: 4.h),
+                                          Text(
+                                            'أفضل تصميمات الدعاية والإعلان بأسلوب عصري واحترافي لتجعل علامتك التجارية تتكلم.',
+                                            style: AppStyles.bodyMuted.copyWith(fontSize: 11.sp),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                SizedBox(width: 14.w),
-                                _buildSampleBestSellerCard(
-                                  title: 'كروت طباعة فاخرة',
-                                  price: '200 ج.م',
-                                ),
-                                SizedBox(width: 14.w),
-                                _buildSampleBestSellerCard(
-                                  title: 'تابلوه خشب VIP',
-                                  price: '350 ج.م',
+                                const Divider(color: AppColors.borderLight, height: 24, thickness: 1),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primaryAccent.withOpacity(0.06),
+                                        borderRadius: BorderRadius.circular(12.r),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.phone, color: AppColors.primaryAccent, size: 14),
+                                          SizedBox(width: 6.w),
+                                          Text(
+                                            '01222856926',
+                                            style: AppStyles.bodyDefault.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 11.sp,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.warningStart.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12.r),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.star, color: AppColors.warningStart, size: 14),
+                                          SizedBox(width: 6.w),
+                                          Text(
+                                            'تصميم هوية، إعلانات رقمية، مطبوعات',
+                                            style: AppStyles.bodyMuted.copyWith(
+                                              fontSize: 10.sp,
+                                              color: AppColors.textMain,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
                           ),
-                          SizedBox(height: 80.h),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+                      SizedBox(height: 24.h),
 
-            // ── Floating Chat Button (Bottom Left) ──
-            Positioned(
-              left: 20.w,
-              bottom: 80.h,
-              child: Container(
-                width: 52.r,
-                height: 52.r,
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(16.r),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.chat_bubble_rounded, color: Colors.white),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('الدعم الفني: 01222856926')),
-                    );
-                  },
+                      // Products Section
+                      if (productProvider.isLoading && publicProducts.isEmpty)
+                        Padding(
+                          padding: EdgeInsets.symmetric(vertical: 40.h),
+                          child: const Center(
+                            child: CircularProgressIndicator(color: AppColors.primaryAccent),
+                          ),
+                        )
+                      else if (publicProducts.isEmpty)
+                        Container(
+                          padding: EdgeInsets.symmetric(vertical: 40.h),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardBg,
+                            border: Border.all(color: AppColors.borderLight),
+                            borderRadius: AppStyles.cardRadius,
+                          ),
+                          child: Column(
+                            children: [
+                              Icon(Icons.storefront, size: 48, color: AppColors.textMuted.withOpacity(0.5)),
+                              SizedBox(height: 12.h),
+                              Text('لا توجد منتجات معروضة حالياً', style: AppStyles.bodyMuted),
+                            ],
+                          ),
+                        )
+                      else
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: publicProducts.length,
+                          itemBuilder: (context, index) {
+                            final p = publicProducts[index];
+                            final fullImageUrl = p.getFullImageUrl(authProvider.baseUrl);
+
+                            return AnimatedEntrance(
+                              delay: Duration(milliseconds: 250 + (index * 90)),
+                              child: Container(
+                               margin: EdgeInsets.only(bottom: 18.h),
+                               decoration: BoxDecoration(
+                                 color: AppColors.cardBg,
+                                 border: Border.all(color: AppColors.borderLight, width: 1.5),
+                                 borderRadius: BorderRadius.circular(24.r),
+                                 boxShadow: AppStyles.cardShadow,
+                               ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  GestureDetector(
+                                    onTap: () => ProductDetailsModal.show(context, p),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        ProductImageWidget(
+                                          imageUrl: p.imageUrl,
+                                          baseUrl: authProvider.baseUrl,
+                                          height: 160.h,
+                                          fit: BoxFit.contain,
+                                          borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+                                        ),
+                                        Padding(
+                                          padding: EdgeInsets.all(16.w),
+                                          child: Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      p.name,
+                                                      style: AppStyles.titleMedium.copyWith(
+                                                        fontSize: 16.sp,
+                                                        color: AppColors.textMain,
+                                                      ),
+                                                    ),
+                                                    SizedBox(height: 6.h),
+                                                    Text(
+                                                      p.description.isEmpty ? 'انقر للاطلاع على المواصفات والوصف الكامل' : p.description,
+                                                      style: AppStyles.bodyMuted,
+                                                      maxLines: 2,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              SizedBox(width: 12.w),
+                                              Container(
+                                                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                                                decoration: BoxDecoration(
+                                                  gradient: const LinearGradient(colors: AppColors.primaryGradient),
+                                                  borderRadius: BorderRadius.circular(12.r),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black.withOpacity(0.08),
+                                                      blurRadius: 6,
+                                                      offset: const Offset(0, 2),
+                                                    ),
+                                                  ],
+                                                ),
+                                                 child: Text(
+                                                   p.price <= 0 ? 'تواصل معنا' : '${p.price.toStringAsFixed(0)} ج.م',
+                                                  style: AppStyles.labelBold.copyWith(
+                                                    color: Colors.white,
+                                                    fontSize: 13.sp,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Divider(color: AppColors.borderLight, height: 16),
+                                  Padding(
+                                    padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 16.w),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: () => ProductDetailsModal.show(context, p),
+                                            icon: const Icon(Icons.info_outline_rounded, size: 16),
+                                            label: Text('المواصفات 🔍', style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.bold)),
+                                            style: OutlinedButton.styleFrom(
+                                              padding: EdgeInsets.symmetric(vertical: 8.h),
+                                              side: BorderSide(color: AppColors.primaryAccent.withOpacity(0.4)),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(width: 8.w),
+                                        Expanded(
+                                          flex: 2,
+                                          child: ElevatedButton.icon(
+                                            onPressed: () {
+                                              PaymentMethodsModal.show(
+                                                context,
+                                                productName: p.name,
+                                                productPrice: p.price,
+                                                onConfirmOrder: (methodTitle, senderInfo, [proofFile, proofBytes, proofFileName]) async {
+                                                  try {
+                                                    final authProvider = context.read<AuthProvider>();
+                                                    final user = authProvider.currentUser;
+
+                                                    final newOrderId = DateTime.now().millisecondsSinceEpoch % 100000;
+                                                    final localOrder = OrderModel(
+                                                      id: newOrderId,
+                                                      userId: user?.id ?? 0,
+                                                      customerName: user?.displayName ?? user?.name ?? user?.username ?? 'عميل',
+                                                      customerPhone: user?.phone ?? '01000000000',
+                                                      productIds: p.id.toString(),
+                                                      itemsSummary: '${p.name} x1',
+                                                      products: [p],
+                                                      status: 'pending_approval',
+                                                      totalPrice: p.price,
+                                                      paymentMethod: methodTitle,
+                                                      createdAt: DateTime.now(),
+                                                    );
+                                                    if (context.mounted) {
+                                                      context.read<OrderProvider>().addLocalOrder(localOrder);
+                                                    }
+
+                                                    final itemsDetails = [
+                                                      {
+                                                        'id': p.id,
+                                                        'name': p.name,
+                                                        'price': p.price,
+                                                        'quantity': 1,
+                                                        'image_url': p.imageUrl ?? '',
+                                                        'description': p.description,
+                                                      }
+                                                    ];
+
+                                                    await ApiService().createOrder(
+                                                      productIds: p.id,
+                                                      itemsSummary: '${p.name} x1',
+                                                      itemsDetails: itemsDetails,
+                                                      paymentMethod: methodTitle,
+                                                      senderInfo: senderInfo,
+                                                      totalPrice: p.price,
+                                                      paymentProof: proofFile,
+                                                      paymentProofBytes: proofBytes,
+                                                      paymentProofName: proofFileName,
+                                                      userId: user?.id,
+                                                      userName: user?.name ?? user?.username,
+                                                      userPhone: user?.phone,
+                                                    );
+
+                                                    if (context.mounted) {
+                                                      context.read<CartProvider>().clearCart();
+                                                      context.read<OrderProvider>().fetchOrders(currentUser: user);
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        SnackBar(
+                                                          content: Text('🎉 تم إرسال الطلب لـ "${p.name}" بنجاح! بانتظار موافقة الأدمن.', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                                          backgroundColor: AppColors.successStart,
+                                                          duration: const Duration(seconds: 4),
+                                                        ),
+                                                      );
+                                                    }
+                                                  } catch (e) {
+                                                    if (context.mounted) {
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        SnackBar(
+                                                          content: Text('حدث خطأ أثناء إرسال الطلب: $e', textAlign: TextAlign.center),
+                                                          backgroundColor: AppColors.dangerStart,
+                                                        ),
+                                                      );
+                                                    }
+                                                  }
+                                                },
+                                              );
+                                            },
+                                            icon: const Icon(Icons.shopping_cart_checkout, color: Colors.white, size: 16),
+                                            label: Text('طلب ودفع', style: AppStyles.labelBold.copyWith(color: Colors.white, fontSize: 12.sp)),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: AppColors.secondaryAccent,
+                                              elevation: 2,
+                                              padding: EdgeInsets.symmetric(vertical: 8.h),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                             ),
+                            );
+                          },
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ],
         ),
-      ),
-
-      // ── Bottom Navigation Bar ──
-      bottomNavigationBar: Container(
-        height: 70.h,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 12,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(
-              index: 0,
-              icon: Icons.person_outline,
-              label: 'Account',
-            ),
-            _buildNavItem(
-              index: 1,
-              icon: Icons.home_rounded,
-              label: 'Home',
-            ),
-            _buildNavItem(
-              index: 2,
-              icon: Icons.shopping_cart_outlined,
-              label: 'Cart',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem({
-    required int index,
-    required IconData icon,
-    required String label,
-  }) {
-    final isSelected = _selectedNavIndex == index;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedNavIndex = index;
-        });
-        if (index == 0) {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
-          );
-        }
-      },
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? Colors.black : Colors.grey.shade400,
-              size: 22.sp,
-            ),
-            SizedBox(height: 2.h),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10.sp,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? Colors.black : Colors.grey.shade500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSampleBestSellerCard({
-    required String title,
-    required String price,
-  }) {
-    return Container(
-      width: 160.w,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20.r),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
-            children: [
-              Container(
-                height: 110.h,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
-                ),
-                child: const Center(
-                  child: Icon(Icons.description_outlined, size: 40, color: Colors.grey),
-                ),
-              ),
-              Positioned(
-                top: 10.h,
-                left: 10.w,
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
-                  child: Text(
-                    'Best Seller',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10.sp,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 10.h,
-                right: 10.w,
-                child: const Icon(Icons.favorite_border, color: Colors.black54),
-              ),
-            ],
-          ),
-          Padding(
-            padding: EdgeInsets.all(12.w),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: AppStyles.labelBold.copyWith(fontSize: 13.sp),
-                ),
-                SizedBox(height: 4.h),
-                Text(
-                  price,
-                  style: TextStyle(
-                    fontSize: 12.sp,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

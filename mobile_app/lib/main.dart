@@ -7,12 +7,27 @@ import 'providers/auth_provider.dart';
 import 'providers/user_provider.dart';
 import 'providers/task_provider.dart';
 import 'providers/product_provider.dart';
+import 'providers/cart_provider.dart';
+import 'providers/order_provider.dart';
+import 'providers/notification_provider.dart';
 import 'screens/splash_screen.dart';
 import 'theme/app_theme.dart';
 
+import 'services/notification_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService().init();
   
+  await Supabase.initialize(
+    url: 'https://kxeqayzxfvoedqvilcmp.supabase.co',
+    anonKey: const String.fromEnvironment(
+      'SUPABASE_ANON_KEY',
+      defaultValue: 'sb_publishable_n2OnkbUJFsVNTdRdDeuxUA_wxUe7z4E',
+    ),
+  );
+
   final authProvider = AuthProvider();
   await authProvider.init();
 
@@ -23,6 +38,9 @@ void main() async {
         ChangeNotifierProvider<UserProvider>(create: (_) => UserProvider()),
         ChangeNotifierProvider<TaskProvider>(create: (_) => TaskProvider()),
         ChangeNotifierProvider<ProductProvider>(create: (_) => ProductProvider()),
+        ChangeNotifierProvider<CartProvider>(create: (_) => CartProvider()),
+        ChangeNotifierProvider<OrderProvider>(create: (_) => OrderProvider()),
+        ChangeNotifierProvider<NotificationProvider>(create: (_) => NotificationProvider()),
       ],
       child: const MyApp(),
     ),

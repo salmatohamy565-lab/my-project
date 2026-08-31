@@ -163,13 +163,6 @@ class CustomBottomNavBar extends StatelessWidget {
         'destination': const AttendanceScreen(),
       },
       {
-        'route': 'files',
-        'title': 'الملفات',
-        'inactiveIcon': Icons.folder_open_outlined,
-        'activeIcon': Icons.folder_rounded,
-        'destination': const AdminFilesScreen(),
-      },
-      {
         'route': 'products',
         'title': 'المنتجات',
         'inactiveIcon': Icons.shopping_bag_outlined,
@@ -189,11 +182,11 @@ class CustomBottomNavBar extends StatelessWidget {
   List<Map<String, dynamic>> _employeeItems() {
     return [
       {
-        'route': 'dashboard',
-        'title': 'لوحتي',
-        'inactiveIcon': Icons.grid_view_rounded,
-        'activeIcon': Icons.grid_view_rounded,
-        'destination': const EmployeeDashboard(),
+        'route': 'products',
+        'title': 'المنتجات',
+        'inactiveIcon': Icons.shopping_bag_outlined,
+        'activeIcon': Icons.shopping_bag_rounded,
+        'destination': ProductsScreen(),
       },
       {
         'route': 'files',
@@ -201,13 +194,6 @@ class CustomBottomNavBar extends StatelessWidget {
         'inactiveIcon': Icons.folder_open_outlined,
         'activeIcon': Icons.folder_rounded,
         'destination': const EmployeeFilesScreen(),
-      },
-      {
-        'route': 'products',
-        'title': 'المنتجات',
-        'inactiveIcon': Icons.shopping_bag_outlined,
-        'activeIcon': Icons.shopping_bag_rounded,
-        'destination': ProductsScreen(),
       },
       {
         'route': 'profile',

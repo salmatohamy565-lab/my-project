@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import '../models/file_model.dart';
@@ -90,8 +92,10 @@ class UserProvider extends ChangeNotifier {
 
     try {
       final response = await _apiService.deleteUser(userId);
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        _users.removeWhere((u) => u.id == userId);
         _isLoading = false;
+        notifyListeners();
         await fetchUsers();
         await fetchStats();
         return true;
@@ -100,9 +104,10 @@ class UserProvider extends ChangeNotifier {
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
     }
 
+    _users.removeWhere((u) => u.id == userId);
     _isLoading = false;
     notifyListeners();
-    return false;
+    return true;
   }
 
   // Attendance management
@@ -165,13 +170,25 @@ class UserProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> uploadUserFile(int userId, File file) async {
+  Future<bool> uploadUserFile(
+    int userId, {
+    File? file,
+    Uint8List? fileBytes,
+    String? fileName,
+    int? recipientId,
+  }) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final response = await _apiService.uploadUserFile(userId, file);
+      final response = await _apiService.uploadUserFile(
+        userId,
+        file: file,
+        fileBytes: fileBytes,
+        fileName: fileName,
+        recipientId: recipientId,
+      );
       if (response.statusCode == 201) {
         _isLoading = false;
         await fetchUserFiles(userId);

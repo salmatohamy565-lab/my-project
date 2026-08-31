@@ -108,8 +108,29 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final currentUser = authProvider.currentUser;
     final staffList = userProvider.users;
 
-    final supervisorsOnly = staffList.where((u) => u.role == 'employee' || u.role == 'supervisor').toList();
     final formattedDateText = DateFormat('yyyy-MM-dd').format(_selectedDate);
+
+    // Guaranteed list of employees: salma, Malak, Devied, Abdelkreem + any fetched staff
+    final List<Map<String, dynamic>> employeeList = [
+      {'id': 141, 'name': 'salma'},
+      {'id': 140, 'name': 'Malak'},
+      {'id': 130, 'name': 'Devied'},
+      {'id': 131, 'name': 'Abdelkreem'},
+    ];
+
+    for (final u in staffList) {
+      final r = u.role.toLowerCase();
+      final un = u.username;
+      final name = u.displayName;
+      if (r == 'employee' || r == 'supervisor' || r == 'admin' || un.startsWith('emp_')) {
+        if (!employeeList.any((e) => e['id'] == u.id)) {
+          employeeList.add({
+            'id': u.id,
+            'name': name.isNotEmpty ? '$name (@$un)' : un,
+          });
+        }
+      }
+    }
 
     return Scaffold(
       key: _scaffoldKey,
@@ -175,16 +196,21 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             Text('الموظف', style: AppStyles.labelBold),
                             SizedBox(height: 8.h),
                             DropdownButtonFormField<int>(
-                              dropdownColor: AppColors.loginCardBg,
-                              value: _selectedUserId,
-                              style: const TextStyle(color: AppColors.textMain),
+                              isExpanded: true,
+                              dropdownColor: AppColors.cardBg,
+                              value: employeeList.any((e) => e['id'] == _selectedUserId) ? _selectedUserId : null,
+                              style: TextStyle(color: AppColors.textMain, fontSize: 13.sp, fontWeight: FontWeight.bold),
                               decoration: const InputDecoration(
                                 hintText: '-- اختر موظف --',
                               ),
-                              items: supervisorsOnly.map((u) {
+                              items: employeeList.map((emp) {
                                 return DropdownMenuItem<int>(
-                                  value: u.id,
-                                  child: Text(u.username),
+                                  value: emp['id'] as int,
+                                  child: Text(
+                                    emp['name'] as String,
+                                    style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.bold, fontSize: 13.sp),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 );
                               }).toList(),
                               onChanged: (val) {
@@ -225,6 +251,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                             Text('الحالة', style: AppStyles.labelBold),
                             SizedBox(height: 8.h),
                             DropdownButtonFormField<String>(
+                              isExpanded: true,
                               dropdownColor: AppColors.loginCardBg,
                               value: _status,
                               style: const TextStyle(color: AppColors.textMain),

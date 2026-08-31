@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/app_colors.dart';
@@ -10,7 +11,9 @@ import '../widgets/radial_background.dart';
 import '../widgets/animations.dart';
 import 'admin/admin_dashboard.dart';
 import 'employee/employee_dashboard.dart';
-import 'products/public_catalog_screen.dart';
+import 'products/products_screen.dart';
+import 'home/home_screen.dart';
+import 'auth/forget_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -21,86 +24,101 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _obscurePassword = true;
+  bool _rememberMe = false;
 
   @override
   void initState() {
     super.initState();
     _loadSavedLogin();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AuthProvider>().clearError();
+      }
+    });
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _usernameController.dispose();
     _phoneController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _loadSavedLogin() async {
     final prefs = await SharedPreferences.getInstance();
-    final savedName = prefs.getString('bolaSavedName');
-    final savedPhone = prefs.getString('bolaSavedPhone');
-    final savedEmail = prefs.getString('bolaSavedEmail');
+    final savedUsername = prefs.getString('bolaRememberedUsername');
+    final savedRemember = prefs.getBool('bolaRememberMe') ?? false;
 
-    if (savedName != null) _nameController.text = savedName;
-    if (savedPhone != null) _phoneController.text = savedPhone;
-    if (savedEmail != null) _emailController.text = savedEmail;
+    if (savedUsername != null && savedRemember) {
+      setState(() {
+        _usernameController.text = savedUsername;
+        _rememberMe = savedRemember;
+      });
+    }
   }
 
-  Future<void> _handleEnter() async {
+  Future<void> _saveLoginCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_rememberMe) {
+      await prefs.setString('bolaRememberedUsername', _usernameController.text.trim());
+      await prefs.setBool('bolaRememberMe', true);
+    } else {
+      await prefs.remove('bolaRememberedUsername');
+      await prefs.setBool('bolaRememberMe', false);
+    }
+  }
+
+
+
+  void _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('bolaSavedName', _nameController.text.trim());
-    await prefs.setString('bolaSavedPhone', _phoneController.text.trim());
-    await prefs.setString('bolaSavedEmail', _emailController.text.trim());
-
-    if (!mounted) return;
-
-    // Check if entered credentials match admin or employee login
     final authProvider = context.read<AuthProvider>();
-    final username = _nameController.text.trim();
-    final password = _passwordController.text;
+    final rawInput = _usernameController.text.trim();
+    final usernameToUse = rawInput.contains('@')
+        ? AuthProvider.extractUsernameFromEmail(rawInput)
+        : rawInput;
 
-    // Attempt backend login silently if password provided
-    if (username.isNotEmpty && password.isNotEmpty) {
-      final success = await authProvider.login(username, password, true);
-      if (success && mounted) {
-        final currentUser = authProvider.currentUser;
-        if (currentUser != null && currentUser.isAdmin) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const AdminDashboard()),
-          );
-          return;
-        } else if (currentUser != null) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const EmployeeDashboard()),
-          );
-          return;
-        }
-      }
-    }
-
-    // Default: Navigate directly to Public Catalog Screen with entered name
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => PublicCatalogScreen(
-          userName: _nameController.text.trim().isNotEmpty
-              ? _nameController.text.trim()
-              : 'malakmoatasem0008780',
-        ),
-      ),
+    final success = await authProvider.phoneLogin(
+      usernameToUse,
+      _phoneController.text.trim(),
+      _rememberMe,
     );
+
+    if (success && mounted) {
+      await _saveLoginCredentials();
+      final user = authProvider.currentUser;
+      Widget targetScreen;
+      if (user != null && user.isAdmin) {
+        targetScreen = const AdminDashboard();
+      } else if (user != null && user.isEmployee) {
+        targetScreen = ProductsScreen();
+      } else {
+        targetScreen = const HomeScreen();
+      }
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => targetScreen),
+      );
+    } else if (!success && mounted) {
+      final err = authProvider.errorMessage ?? 'اسم المستخدم أو رقم الهاتف غير صحيح';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✕ $err', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
+          backgroundColor: AppColors.dangerStart,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
   }
+
+
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+
     return Scaffold(
       body: RadialBackground(
         child: SingleChildScrollView(
@@ -115,34 +133,36 @@ class _LoginScreenState extends State<LoginScreen> {
                 delay: const Duration(milliseconds: 80),
                 child: Column(
                   children: [
-                    Image.asset(
-                      'assets/LOGO_new_bola_designs_for_dark_cx.png',
-                      height: 100.h,
+                    SvgPicture.asset(
+                      'assets/logo2.svg',
+                      width: 110.w,
+                      height: 110.w,
                       fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) => Image.asset(
-                        'assets/bola_logo.png',
-                        height: 100.h,
+                      placeholderBuilder: (context) => SvgPicture.asset(
+                        'assets/logo.svg',
+                        width: 110.w,
+                        height: 110.w,
                         fit: BoxFit.contain,
                       ),
                     ),
                     SizedBox(height: 16.h),
                     Text(
-                      'مرحباً بك في Bola Designs',
-                      style: AppStyles.titleMedium.copyWith(fontSize: 20.sp),
+                      'إنشاء حساب',
+                      style: AppStyles.titleMedium.copyWith(fontSize: 22.sp, fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
                     ),
-                    SizedBox(height: 6.h),
+                    SizedBox(height: 8.h),
                     Text(
-                      'أدخل بياناتك للانتقال للصفحة الرئيسية',
+                      'ادخل اسمك ورقم هاتفك للدخول إلى الحساب.',
                       style: AppStyles.bodyMuted,
                       textAlign: TextAlign.center,
                     ),
                   ],
                 ),
               ),
-              SizedBox(height: 24.h),
+              SizedBox(height: 28.h),
 
-              // Input Form Card
+              // Login Card
               AnimatedEntrance(
                 delay: const Duration(milliseconds: 200),
                 slideOffset: 30,
@@ -159,102 +179,114 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // 1. الاسم (Full Name)
-                        Text('الاسم', style: AppStyles.labelBold, textAlign: TextAlign.right),
-                        SizedBox(height: 6.h),
+                        if (authProvider.errorMessage != null && authProvider.errorMessage!.trim().isNotEmpty) ...[
+                          AnimatedEntrance(
+                            child: Container(
+                              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                              decoration: BoxDecoration(
+                                color: AppColors.dangerStart.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8.r),
+                                border: const Border(
+                                  right: BorderSide(color: AppColors.dangerStart, width: 4),
+                                ),
+                              ),
+                              child: Text(
+                                authProvider.errorMessage!,
+                                style: AppStyles.bodyDefault.copyWith(
+                                  color: AppColors.dangerStart,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: 20.h),
+                        ],
+                        Text('اسم المستخدم أو الاسم', style: AppStyles.labelBold, textAlign: TextAlign.right),
+                        SizedBox(height: 8.h),
                         TextFormField(
-                          controller: _nameController,
+                          controller: _usernameController,
                           style: const TextStyle(color: AppColors.textMain),
                           textAlign: TextAlign.right,
+                          onChanged: (_) {
+                            if (authProvider.errorMessage != null) {
+                              authProvider.clearError();
+                            }
+                          },
                           decoration: const InputDecoration(
-                            hintText: 'أدخل الاسم بالكامل',
+                            hintText: 'أدخل الاسم الثلاثي (أو اسم المستخدم)',
                             prefixIcon: Icon(Icons.person_outline, color: AppColors.textMuted),
                           ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
-                              return 'يرجى إدخال الاسم';
+                              return 'يرجى إدخال اسم المستخدم أو الاسم';
+                            }
+                            final trimmed = value.trim();
+                            final lower = trimmed.toLowerCase();
+
+                            final isStaff = lower == 'admin' ||
+                                            lower == 'employee' ||
+                                            lower.startsWith('admin_') ||
+                                            lower.startsWith('emp_');
+
+                            if (!isStaff && !trimmed.contains('@')) {
+                              final words = trimmed.split(RegExp(r'\s+'));
+                              if (words.length < 3) {
+                                return 'يرجى كتابة الاسم الثلاثي على الأقل أو البريد الإلكتروني';
+                              }
                             }
                             return null;
                           },
-                        ),
-                        SizedBox(height: 16.h),
 
-                        // 2. رقم الهاتف (Phone Number)
-                        Text('رقم الهاتف', style: AppStyles.labelBold, textAlign: TextAlign.right),
-                        SizedBox(height: 6.h),
+                        ),
+
+
+                        SizedBox(height: 20.h),
+                        Text('رقم الهاتف (اختياري)', style: AppStyles.labelBold, textAlign: TextAlign.right),
+                        SizedBox(height: 8.h),
                         TextFormField(
                           controller: _phoneController,
                           keyboardType: TextInputType.phone,
                           style: const TextStyle(color: AppColors.textMain),
                           textAlign: TextAlign.right,
+                          onChanged: (_) {
+                            if (authProvider.errorMessage != null) {
+                              authProvider.clearError();
+                            }
+                          },
                           decoration: const InputDecoration(
-                            hintText: 'أدخل رقم الهاتف',
-                            prefixIcon: Icon(Icons.phone_android_outlined, color: AppColors.textMuted),
+                            hintText: 'أدخل رقم الهاتف (اختياري)',
+                            prefixIcon: Icon(Icons.phone_outlined, color: AppColors.textMuted),
                           ),
                           validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'يرجى إدخال رقم الهاتف';
-                            }
                             return null;
                           },
                         ),
-                        SizedBox(height: 16.h),
 
-                        // 3. البريد الإلكتروني (Email)
-                        Text('البريد الإلكتروني', style: AppStyles.labelBold, textAlign: TextAlign.right),
-                        SizedBox(height: 6.h),
-                        TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          style: const TextStyle(color: AppColors.textMain),
-                          textAlign: TextAlign.right,
-                          decoration: const InputDecoration(
-                            hintText: 'أدخل البريد الإلكتروني',
-                            prefixIcon: Icon(Icons.email_outlined, color: AppColors.textMuted),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'يرجى إدخال البريد الإلكتروني';
-                            }
-                            return null;
-                          },
-                        ),
-                        SizedBox(height: 16.h),
+                        SizedBox(height: 12.h),
 
-                        // 4. كلمة السر (Password)
-                        Text('كلمة السر', style: AppStyles.labelBold, textAlign: TextAlign.right),
-                        SizedBox(height: 6.h),
-                        TextFormField(
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          style: const TextStyle(color: AppColors.textMain),
-                          textAlign: TextAlign.right,
-                          decoration: InputDecoration(
-                            hintText: 'أدخل كلمة السر',
-                            prefixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                                color: AppColors.textMuted,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: [
+                            Checkbox(
+                              value: _rememberMe,
+                              activeColor: AppColors.primaryAccent,
+                              checkColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4.r),
                               ),
-                              onPressed: () => setState(() {
-                                _obscurePassword = !_obscurePassword;
+                              onChanged: (value) => setState(() {
+                                _rememberMe = value ?? false;
                               }),
                             ),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'يرجى إدخال كلمة السر';
-                            }
-                            return null;
-                          },
+                            Text('تذكرني', style: AppStyles.bodyDefault),
+                          ],
                         ),
-                        SizedBox(height: 24.h),
+                        SizedBox(height: 20.h),
 
-                        // Enter Button
+                        // Login button
                         AnimatedPressButton(
-                          onTap: _handleEnter,
+                          onTap: authProvider.isLoading ? null : _handleLogin,
                           child: Container(
                             height: 54.h,
                             alignment: Alignment.center,
@@ -265,21 +297,30 @@ class _LoginScreenState extends State<LoginScreen> {
                               borderRadius: AppStyles.buttonRadius,
                               boxShadow: AppStyles.buttonShadow,
                             ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20.sp),
-                                SizedBox(width: 10.w),
-                                Text(
-                                  'الدخول إلى الرئيسية',
-                                  style: AppStyles.labelBold.copyWith(
-                                    fontSize: 16.sp,
-                                    color: Colors.white,
-                                    letterSpacing: 0.5,
+                            child: authProvider.isLoading
+                                ? SizedBox(
+                                    height: 22.w,
+                                    width: 22.w,
+                                    child: const CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2.5,
+                                    ),
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.login_rounded, color: Colors.white, size: 20.sp),
+                                      SizedBox(width: 10.w),
+                                      Text(
+                                        'إنشاء حساب',
+                                        style: AppStyles.labelBold.copyWith(
+                                          fontSize: 16.sp,
+                                          color: Colors.white,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                              ],
-                            ),
                           ),
                         ),
                       ],
@@ -287,7 +328,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
-              SizedBox(height: 20.h),
+              SizedBox(height: 16.h),
+
             ],
           ),
         ),

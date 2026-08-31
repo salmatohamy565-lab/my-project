@@ -2,7 +2,7 @@ name: bola_designs
 description: "A professional Flutter mobile application for Bola Designs management."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.3+4
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

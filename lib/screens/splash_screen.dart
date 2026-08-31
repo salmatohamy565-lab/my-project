@@ -9,6 +9,7 @@ import '../widgets/radial_background.dart';
 import 'login_screen.dart';
 import 'admin/admin_dashboard.dart';
 import 'employee/employee_dashboard.dart';
+import 'products/products_screen.dart';
 import 'home/home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -115,7 +116,7 @@ class _SplashScreenState extends State<SplashScreen>
       if (user != null && user.isAdmin) {
         targetScreen = const AdminDashboard();
       } else if (user != null && user.isEmployee) {
-        targetScreen = const EmployeeDashboard();
+        targetScreen = ProductsScreen();
       } else {
         targetScreen = const HomeScreen();
       }

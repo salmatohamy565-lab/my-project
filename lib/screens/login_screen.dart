@@ -94,7 +94,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (user != null && user.isAdmin) {
         targetScreen = const AdminDashboard();
       } else if (user != null && user.isEmployee) {
-        targetScreen = const EmployeeDashboard();
+        targetScreen = ProductsScreen();
       } else {
         targetScreen = const HomeScreen();
       }

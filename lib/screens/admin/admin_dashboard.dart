@@ -120,10 +120,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Future<void> _createNewUser() async {
     final username = _usernameController.text.trim();
-    final password = _passwordController.text.trim();
+    final password = _passwordController.text.trim().isNotEmpty ? _passwordController.text.trim() : '123456';
 
-    if (username.isEmpty || password.isEmpty) {
-      _showSnackbar('يرجى إدخال اسم المستخدم وكلمة المرور', Colors.red);
+    if (username.isEmpty) {
+      _showSnackbar('يرجى إدخال اسم المستخدم للموظف', Colors.red);
       return;
     }
 
@@ -279,9 +279,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
     if (currentUser != null && !currentUser.isAdmin) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          Widget target = currentUser.isEmployee ? const EmployeeDashboard() : ProductsScreen();
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => target),
+            MaterialPageRoute(builder: (_) => ProductsScreen()),
           );
         }
       });
@@ -296,6 +295,27 @@ class _AdminDashboardState extends State<AdminDashboard> {
       final un = u.username.toLowerCase();
       return r == 'employee' || r == 'admin' || r == 'owner' || r == 'supervisor' || un.startsWith('emp_') || un.startsWith('admin_');
     }).toList();
+
+    final Set<String> uniqueEmpSet = {};
+    for (final u in staffList) {
+      final r = u.role.toLowerCase();
+      final un = u.username.toLowerCase();
+      if (r == 'employee' || r == 'supervisor' || un.startsWith('emp_')) {
+        if (un.contains('salma')) {
+          uniqueEmpSet.add('salma');
+        } else if (un.contains('malak')) {
+          uniqueEmpSet.add('malak');
+        } else if (un.contains('dieved') || un.contains('devied')) {
+          uniqueEmpSet.add('dieved');
+        } else if (un.contains('abdelkreem')) {
+          uniqueEmpSet.add('abdelkreem');
+        } else if (un.isNotEmpty) {
+          uniqueEmpSet.add(un);
+        }
+      }
+    }
+    uniqueEmpSet.addAll({'salma', 'malak', 'dieved', 'abdelkreem'});
+    final int totalEmpCount = uniqueEmpSet.length;
 
 
     return Scaffold(
@@ -377,35 +397,58 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ),
                       SizedBox(height: 20.h),
 
-                      // Stats Grid View
-                      GridView.count(
-                        crossAxisCount: 2,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisSpacing: 12.w,
-                        mainAxisSpacing: 12.h,
-                        childAspectRatio: 1.5,
-                        children: [
-                          _buildStatCard('إجمالي الموظفين', '${stats['staff_count'] ?? 0}', Icons.people_outline, onTap: () {
-                            if (_scrollController.hasClients) {
-                              _scrollController.animateTo(540.h, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
-                            }
-                          }),
-                          _buildStatCard('المهام الموكلة', '${stats['task_count'] ?? 0}', Icons.assignment_outlined, onTap: () {
-                            if (_scrollController.hasClients) {
-                              _scrollController.animateTo(_scrollController.position.maxScrollExtent, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
-                            }
-                          }),
-                          _buildStatCard('المهام المؤرشفة', '${stats['archived_count'] ?? 0}', Icons.archive_outlined, onTap: () {
-                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ArchivedTasksScreen()));
-                          }),
-                          _buildStatCard('الملفات المرفوعة', '${stats['file_count'] ?? 0}', Icons.file_upload_outlined, onTap: () {
-                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdminFilesScreen()));
-                          }),
-                          _buildStatCard('الملفات المؤرشفة', '${stats['archived_files_count'] ?? 0}', Icons.folder_open_outlined, onTap: () {
-                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ArchivedFilesScreen()));
-                          }),
-                        ],
+                      // Total Employees Stat Card
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(18.w),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppColors.primaryAccent.withOpacity(0.16),
+                              AppColors.secondaryAccent.withOpacity(0.14),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          border: Border.all(color: AppColors.borderLight),
+                          borderRadius: BorderRadius.circular(20.r),
+                          boxShadow: AppStyles.cardShadow,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(12.r),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryAccent.withOpacity(0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.people_alt_rounded, color: AppColors.primaryAccent, size: 28),
+                            ),
+                            SizedBox(width: 14.w),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'إجمالي عدد الموظفين',
+                                    style: AppStyles.bodyMuted.copyWith(fontSize: 12.sp, fontWeight: FontWeight.bold),
+                                  ),
+                                  SizedBox(height: 2.h),
+                                  Text(
+                                    'سلمى • ملك • ديفيد • عبد الكريم${totalEmpCount > 4 ? " (+${totalEmpCount - 4} جديد)" : ""}',
+                                    style: AppStyles.bodyMuted.copyWith(fontSize: 11.sp),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              '$totalEmpCount',
+                              style: AppStyles.titleLarge.copyWith(fontSize: 26.sp, fontWeight: FontWeight.bold, color: AppColors.primaryAccent),
+                            ),
+                          ],
+                        ),
                       ),
                       SizedBox(height: 24.h),
 
@@ -426,7 +469,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             ),
                             SizedBox(height: 4.h),
                             Text(
-                              'استخدم النماذج أدناه لإضافة موظف جديد أو إسناد مهمة أو رفع الملفات.',
+                              'استخدم النموذج أدناه لإضافة موظف جديد وتخصيص صلاحياته.',
                               style: AppStyles.bodyMuted,
                             ),
                           ],
@@ -447,144 +490,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             TextField(
                               controller: _usernameController,
                               style: const TextStyle(color: AppColors.textMain),
-                              decoration: const InputDecoration(hintText: 'اسم المستخدم'),
-                            ),
-                            SizedBox(height: 14.h),
-                            Text('كلمة السر', style: AppStyles.labelBold),
-                            SizedBox(height: 6.h),
-                            TextField(
-                              controller: _passwordController,
-                              style: const TextStyle(color: AppColors.textMain),
-                              obscureText: true,
-                              decoration: const InputDecoration(hintText: 'كلمة السر للموظف'),
+                              decoration: const InputDecoration(hintText: 'اسم المستخدم للموظف'),
                             ),
                             SizedBox(height: 16.h),
                             _buildGradientButton(
                               text: '+ إنشاء موظف',
                               onPressed: userProvider.isLoading ? null : _createNewUser,
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(height: 20.h),
-
-                      // Add Task Card
-                      _buildFormCard(
-                        title: 'إضافة مهمة',
-                        subtitle: 'أسند مهام للموظفين',
-                        icon: Icons.assignment_turned_in_outlined,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text('عنوان المهمة', style: AppStyles.labelBold),
-                            SizedBox(height: 6.h),
-                            TextField(
-                              controller: _taskTitleController,
-                              style: const TextStyle(color: AppColors.textMain),
-                              decoration: const InputDecoration(hintText: 'مثال: تصميم شعار جديد'),
-                            ),
-                            SizedBox(height: 14.h),
-                            Text('الوصف', style: AppStyles.labelBold),
-                            SizedBox(height: 6.h),
-                            TextField(
-                              controller: _taskDescController,
-                              style: const TextStyle(color: AppColors.textMain),
-                              maxLines: 2,
-                              decoration: const InputDecoration(hintText: 'تفاصيل المهمة المطلوبة...'),
-                            ),
-                            SizedBox(height: 14.h),
-                            Text('إسناد إلى', style: AppStyles.labelBold),
-                            SizedBox(height: 6.h),
-                            DropdownButtonFormField<int>(
-                              dropdownColor: AppColors.loginCardBg,
-                              value: _selectedUserForTask,
-                              style: const TextStyle(color: AppColors.textMain),
-                              decoration: const InputDecoration(hintText: '-- اختر موظف --'),
-                              items: supervisorsOnly.map((u) {
-                                return DropdownMenuItem<int>(
-                                  value: u.id,
-                                  child: Text(u.username, textAlign: TextAlign.right),
-                                );
-                              }).toList(),
-                              onChanged: (val) {
-                                setState(() {
-                                  _selectedUserForTask = val;
-                                });
-                              },
-                            ),
-                            SizedBox(height: 16.h),
-                            _buildGradientButton(
-                              text: 'إضافة المهمة',
-                              onPressed: taskProvider.isLoading ? null : _assignTask,
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(height: 20.h),
-
-                      // Upload File Card
-                      _buildFormCard(
-                        title: 'رفع ملف لموظف',
-                        subtitle: 'أرسل ملفاً أو مستند عمل لمشرف معين',
-                        icon: Icons.upload_file_outlined,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text('الموظف المستهدف', style: AppStyles.labelBold),
-                            SizedBox(height: 6.h),
-                            DropdownButtonFormField<int>(
-                              dropdownColor: AppColors.loginCardBg,
-                              value: _selectedUserForFile,
-                              style: const TextStyle(color: AppColors.textMain),
-                              decoration: const InputDecoration(hintText: '-- اختر موظف --'),
-                              items: supervisorsOnly.map((u) {
-                                return DropdownMenuItem<int>(
-                                  value: u.id,
-                                  child: Text(u.username),
-                                );
-                              }).toList(),
-                              onChanged: (val) {
-                                setState(() {
-                                  _selectedUserForFile = val;
-                                  _selectedFile = null;
-                                  _selectedFileBytes = null;
-                                  _selectedFileName = null;
-                                });
-                              },
-                            ),
-                            SizedBox(height: 14.h),
-                            Text('الملف', style: AppStyles.labelBold),
-                            SizedBox(height: 6.h),
-                            InkWell(
-                              onTap: _selectFile,
-                              child: Container(
-                                padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 13.h),
-                                decoration: BoxDecoration(
-                                  color: AppColors.inputBg,
-                                  border: Border.all(color: AppColors.borderDark),
-                                  borderRadius: AppStyles.inputRadius,
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.attachment, color: AppColors.textMuted),
-                                    SizedBox(width: 10.w),
-                                    Expanded(
-                                      child: Text(
-                                        _selectedFileName ?? 'اختر ملفاً للرفع',
-                                        style: AppStyles.bodyDefault.copyWith(
-                                          color: _selectedFileName != null ? Colors.white : AppColors.textMuted,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            SizedBox(height: 16.h),
-                            _buildGradientButton(
-                              text: 'رفع الملف',
-                              onPressed: userProvider.isLoading ? null : _uploadFile,
                             ),
                           ],
                         ),
@@ -607,7 +518,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             ),
                       SizedBox(height: 24.h),
 
-                      // Active Tasks List Section
                       // Payment Proof Screenshots Review Section (InstaPay & Vodafone Cash)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -618,7 +528,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                 Icon(Icons.receipt_long_rounded, color: AppColors.primaryAccent, size: 20.r),
                                 SizedBox(width: 8.w),
                                 Expanded(
-                                  child: Text('إيصالات التحويل للراجعة (InstaPay / Cash)', style: AppStyles.titleMedium, overflow: TextOverflow.ellipsis),
+                                  child: Text('إيصالات التحويل للمراجعة (InstaPay / Cash)', style: AppStyles.titleMedium, overflow: TextOverflow.ellipsis),
                                 ),
                               ],
                             ),
@@ -647,40 +557,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               itemBuilder: (context, idx) {
                                 final proof = _samplePaymentProofs[idx];
                                 return _buildPaymentProofCard(proof);
-                              },
-                            ),
-                      SizedBox(height: 24.h),
-
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('المهام الحالية', style: AppStyles.titleMedium),
-                          ElevatedButton.icon(
-                            onPressed: _isArchiving ? null : _archiveCompletedTasks,
-                            icon: const Icon(Icons.archive, size: 16, color: Colors.white),
-                            label: Text(
-                              'أرشفة المنتهية',
-                              style: AppStyles.labelBold.copyWith(fontSize: 11.sp, color: Colors.white),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primaryAccent,
-                              side: BorderSide.none,
-                              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 8.h),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 12.h),
-                      activeTasks.isEmpty
-                          ? _buildEmptyState(Icons.assignment_outlined, 'لا توجد مهام حالية')
-                          : ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: activeTasks.length,
-                              itemBuilder: (context, idx) {
-                                final t = activeTasks[idx];
-                                return _buildTaskCard(t);
                               },
                             ),
                     ],

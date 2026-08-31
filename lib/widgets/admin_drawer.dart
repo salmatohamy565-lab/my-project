@@ -71,13 +71,6 @@ class AdminDrawer extends StatelessWidget {
                 ),
                 _buildNavItem(
                   context: context,
-                  title: 'إدارة الملفات',
-                  icon: Icons.file_upload_outlined,
-                  route: 'files',
-                  destination: const AdminFilesScreen(),
-                ),
-                _buildNavItem(
-                  context: context,
                   title: 'المهام المؤرشفة',
                   icon: Icons.archive_outlined,
                   route: 'archived_tasks',

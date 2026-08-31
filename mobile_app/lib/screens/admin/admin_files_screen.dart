@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb, Uint8List;
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_styles.dart';
@@ -29,6 +31,8 @@ class _AdminFilesScreenState extends State<AdminFilesScreen> {
 
   int? _selectedUserId;
   File? _selectedFile;
+  Uint8List? _selectedFileBytes;
+  String? _selectedFileName;
   bool _isDownloading = false;
   String? _downloadingFilename;
 
@@ -42,10 +46,18 @@ class _AdminFilesScreenState extends State<AdminFilesScreen> {
 
   Future<void> _selectFile() async {
     final result = await FilePicker.platform.pickFiles();
-    if (result != null && result.files.single.path != null) {
-      setState(() {
-        _selectedFile = File(result.files.single.path!);
-      });
+    if (result != null) {
+      if (kIsWeb) {
+        setState(() {
+          _selectedFileBytes = result.files.single.bytes;
+          _selectedFileName = result.files.single.name;
+        });
+      } else if (result.files.single.path != null) {
+        setState(() {
+          _selectedFile = File(result.files.single.path!);
+          _selectedFileName = result.files.single.name;
+        });
+      }
     }
   }
 
@@ -54,18 +66,25 @@ class _AdminFilesScreenState extends State<AdminFilesScreen> {
       _showSnackbar('يرجى اختيار الموظف أولاً', Colors.red);
       return;
     }
-    if (_selectedFile == null) {
+    if (_selectedFile == null && _selectedFileBytes == null) {
       _showSnackbar('يرجى اختيار ملف للرفع', Colors.red);
       return;
     }
 
     final userProvider = context.read<UserProvider>();
-    final success = await userProvider.uploadUserFile(_selectedUserId!, _selectedFile!);
+    final success = await userProvider.uploadUserFile(
+      _selectedUserId!,
+      file: _selectedFile,
+      fileBytes: _selectedFileBytes,
+      fileName: _selectedFileName,
+    );
     
     if (success) {
       _showSnackbar('✓ تم رفع الملف بنجاح', AppColors.successStart);
       setState(() {
         _selectedFile = null;
+        _selectedFileBytes = null;
+        _selectedFileName = null;
       });
       // Refresh user files
       await userProvider.fetchUserFiles(_selectedUserId!);
@@ -96,15 +115,25 @@ class _AdminFilesScreenState extends State<AdminFilesScreen> {
     });
 
     try {
+      final apiService = ApiService();
+      final fullUrl = fileUrl.startsWith('http') ? fileUrl : '${apiService.baseUrl}$fileUrl';
+
+      if (kIsWeb) {
+        final uri = Uri.parse(fullUrl);
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        setState(() {
+          _isDownloading = false;
+          _downloadingFilename = null;
+        });
+        return;
+      }
+
       final tempDir = await getTemporaryDirectory();
       final savePath = '${tempDir.path}/$filename';
-      
-      final apiService = ApiService();
       final dio = Dio();
       
-      // Download the file passing cookies for auth
       await dio.download(
-        '${apiService.baseUrl}$fileUrl',
+        fullUrl,
         savePath,
         options: Options(
           headers: apiService.cookie != null ? {'Cookie': apiService.cookie} : null,
@@ -116,7 +145,6 @@ class _AdminFilesScreenState extends State<AdminFilesScreen> {
         _downloadingFilename = null;
       });
 
-      // Open the downloaded file using open_filex
       final result = await OpenFilex.open(savePath);
       if (result.type != ResultType.done) {
         _showSnackbar('لا يمكن فتح هذا النوع من الملفات: ${result.message}', Colors.amber);
@@ -149,7 +177,11 @@ class _AdminFilesScreenState extends State<AdminFilesScreen> {
     final staffList = userProvider.users;
     final employeeFiles = userProvider.userFiles;
 
-    final supervisorsOnly = staffList.where((u) => u.role != 'admin').toList();
+    final supervisorsOnly = staffList.where((u) {
+      final r = u.role.toLowerCase();
+      final un = u.username.toLowerCase();
+      return r == 'employee' || r == 'admin' || r == 'owner' || r == 'supervisor' || un.startsWith('emp_') || un.startsWith('admin_');
+    }).toList();
 
     return Scaffold(
       key: _scaffoldKey,
@@ -215,22 +247,30 @@ class _AdminFilesScreenState extends State<AdminFilesScreen> {
                             Text('الموظف', style: AppStyles.labelBold),
                             SizedBox(height: 8.h),
                             DropdownButtonFormField<int>(
-                              dropdownColor: AppColors.loginCardBg,
+                              isExpanded: true,
+                              dropdownColor: Colors.white,
                               value: _selectedUserId,
-                              style: const TextStyle(color: AppColors.textMain),
+                              style: TextStyle(color: Colors.black87, fontSize: 13.sp, fontWeight: FontWeight.bold),
                               decoration: const InputDecoration(
-                                hintText: '-- اختر موظف --',
+                                hintText: '-- اختر موظف أو أدمن --',
                               ),
                               items: supervisorsOnly.map((u) {
                                 return DropdownMenuItem<int>(
                                   value: u.id,
-                                  child: Text(u.username),
+                                  child: Text(
+                                    '👤 ${u.displayName} (@${u.username})',
+                                    style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 );
                               }).toList(),
+
                               onChanged: (val) {
                                 setState(() {
                                   _selectedUserId = val;
                                   _selectedFile = null;
+                                  _selectedFileBytes = null;
+                                  _selectedFileName = null;
                                 });
                                 if (val != null) {
                                   userProvider.fetchUserFiles(val);
@@ -257,11 +297,9 @@ class _AdminFilesScreenState extends State<AdminFilesScreen> {
                                     SizedBox(width: 10.w),
                                     Expanded(
                                       child: Text(
-                                        _selectedFile != null
-                                            ? _selectedFile!.path.split(Platform.pathSeparator).last
-                                            : 'اختر ملفاً للرفع',
+                                        _selectedFileName ?? 'اختر ملفاً للرفع',
                                         style: AppStyles.bodyDefault.copyWith(
-                                          color: _selectedFile != null ? Colors.white : AppColors.textMuted,
+                                          color: _selectedFileName != null ? Colors.white : AppColors.textMuted,
                                         ),
                                         overflow: TextOverflow.ellipsis,
                                       ),

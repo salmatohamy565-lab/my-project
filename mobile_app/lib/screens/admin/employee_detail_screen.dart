@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_styles.dart';
@@ -11,6 +13,7 @@ import '../../providers/user_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/radial_background.dart';
+import '../../utils/copy_utils.dart';
 
 class EmployeeDetailScreen extends StatefulWidget {
   final int userId;
@@ -53,14 +56,25 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
     });
 
     try {
+      final apiService = ApiService();
+      final fullUrl = fileUrl.startsWith('http') ? fileUrl : '${apiService.baseUrl}$fileUrl';
+
+      if (kIsWeb) {
+        final uri = Uri.parse(fullUrl);
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        setState(() {
+          _isDownloading = false;
+          _downloadingFilename = null;
+        });
+        return;
+      }
+
       final tempDir = await getTemporaryDirectory();
       final savePath = '${tempDir.path}/$filename';
-      
-      final apiService = ApiService();
       final dio = Dio();
       
       await dio.download(
-        '${apiService.baseUrl}$fileUrl',
+        fullUrl,
         savePath,
         options: Options(
           headers: apiService.cookie != null ? {'Cookie': apiService.cookie} : null,
@@ -133,7 +147,18 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(widget.username, style: AppStyles.titleLarge),
+                      InkWell(
+                        onTap: () => copyToClipboard(context, widget.username, label: 'اسم الموظف'),
+                        borderRadius: BorderRadius.circular(6.r),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(widget.username, style: AppStyles.titleLarge),
+                            SizedBox(width: 8.w),
+                            Icon(Icons.copy_rounded, size: 16.r, color: AppColors.primaryAccent),
+                          ],
+                        ),
+                      ),
                       SizedBox(height: 4.h),
                       Text('صفحة تفصيلية خاصة بالموظف (ID: ${widget.userId})', style: AppStyles.bodyMuted),
                     ],
