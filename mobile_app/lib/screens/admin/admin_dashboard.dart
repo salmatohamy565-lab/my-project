@@ -17,6 +17,7 @@ import '../../widgets/custom_bottom_nav_bar.dart';
 import '../../widgets/app_logo_bar.dart';
 import 'employee_detail_screen.dart';
 import 'admin_orders_screen.dart';
+import 'admin_offers_screen.dart';
 import 'archived_tasks_screen.dart';
 import 'archived_files_screen.dart';
 import 'admin_files_screen.dart';
@@ -50,31 +51,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Timer? _statsTimer;
   bool _isArchiving = false;
   String? _archiveMessage;
-
-  final List<Map<String, dynamic>> _samplePaymentProofs = [
-    {
-      'id': 'TRX-101',
-      'user_name': 'عميل بولا ديزاينز',
-      'payment_method': 'انستاباي (InstaPay)',
-      'amount': '150.00 ج.م',
-      'sender_phone': '01228569626',
-      'status': 'Payment Proof Submitted',
-      'status_ar': 'إيصال مرفق للمراجعة ⏳',
-      'timestamp': '2026-07-25 18:30',
-      'is_verified': false,
-    },
-    {
-      'id': 'TRX-102',
-      'user_name': 'مؤسسة الدعاية والشركات',
-      'payment_method': 'فودافون كاش',
-      'amount': '380.00 ج.م',
-      'sender_phone': '01001696249',
-      'status': 'Payment Proof Submitted',
-      'status_ar': 'إيصال مرفق للمراجعة ⏳',
-      'timestamp': '2026-07-25 17:15',
-      'is_verified': false,
-    },
-  ];
 
   @override
   void initState() {
@@ -395,6 +371,64 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           ],
                         ),
                       ),
+                      SizedBox(height: 12.h),
+
+                      // Admin Offers & Deals Management Banner
+                      Container(
+                        padding: EdgeInsets.all(16.w),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFE63946), Color(0xFF9D0208)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(20.r),
+                          boxShadow: AppStyles.cardShadow,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(12.r),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.local_offer_rounded, color: Colors.white, size: 28),
+                            ),
+                            SizedBox(width: 14.w),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'إدارة قسم العروض والخصومات 🏷️',
+                                    style: AppStyles.titleSmall.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                                  ),
+                                  SizedBox(height: 2.h),
+                                  Text(
+                                    'إضافة منتجات العروض، تعديل الأسعار، ومواصفات الخصم',
+                                    style: AppStyles.bodyMuted.copyWith(color: Colors.white70, fontSize: 11.sp),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            ElevatedButton(
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const AdminOffersScreen()),
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: const Color(0xFFD90429),
+                                padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                              ),
+                              child: const Text('إدارة العروض', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      ),
                       SizedBox(height: 20.h),
 
                       // Total Employees Stat Card
@@ -514,49 +548,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               itemBuilder: (context, idx) {
                                 final u = supervisorsOnly[idx];
                                 return _buildUserCard(u);
-                              },
-                            ),
-                      SizedBox(height: 24.h),
-
-                      // Payment Proof Screenshots Review Section (InstaPay & Vodafone Cash)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Icon(Icons.receipt_long_rounded, color: AppColors.primaryAccent, size: 20.r),
-                                SizedBox(width: 8.w),
-                                Expanded(
-                                  child: Text('إيصالات التحويل للمراجعة (InstaPay / Cash)', style: AppStyles.titleMedium, overflow: TextOverflow.ellipsis),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryAccent.withOpacity(0.08),
-                              borderRadius: BorderRadius.circular(10.r),
-                            ),
-                            child: Text(
-                              '${_samplePaymentProofs.length} إيصالات',
-                              style: TextStyle(color: AppColors.primaryAccent, fontSize: 10.sp, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 12.h),
-
-                      _samplePaymentProofs.isEmpty
-                          ? _buildEmptyState(Icons.receipt_long_outlined, 'لا توجد إيصالات تحويل جديدة للمراجعة')
-                          : ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: _samplePaymentProofs.length,
-                              itemBuilder: (context, idx) {
-                                final proof = _samplePaymentProofs[idx];
-                                return _buildPaymentProofCard(proof);
                               },
                             ),
                     ],
@@ -801,188 +792,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildPaymentProofCard(Map<String, dynamic> proof) {
-    final bool isVerified = proof['is_verified'] == true;
-
-    return Container(
-      margin: EdgeInsets.only(bottom: 12.h),
-      padding: EdgeInsets.all(14.w),
-      decoration: BoxDecoration(
-        color: AppColors.cardBg,
-        borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(
-          color: isVerified ? AppColors.successStart : AppColors.borderLight,
-          width: isVerified ? 1.5 : 1.0,
-        ),
-        boxShadow: AppStyles.cardShadow,
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Container(
-                      padding: EdgeInsets.all(8.r),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryAccent.withOpacity(0.08),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.receipt, color: AppColors.primaryAccent, size: 20.r),
-                    ),
-                    SizedBox(width: 10.w),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(proof['user_name'], style: AppStyles.labelBold.copyWith(fontSize: 14.sp), overflow: TextOverflow.ellipsis),
-                          Text('${proof['id']} | ${proof['payment_method']}', style: TextStyle(color: AppColors.textMuted, fontSize: 11.sp), overflow: TextOverflow.ellipsis),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(width: 8.w),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                decoration: BoxDecoration(
-                  color: isVerified ? AppColors.successStart.withOpacity(0.12) : AppColors.inputBg,
-                  borderRadius: BorderRadius.circular(12.r),
-                ),
-                child: Text(
-                  isVerified ? 'تم التأكيد ✓' : proof['status_ar'],
-                  style: TextStyle(
-                    color: isVerified ? AppColors.successStart : AppColors.textMain,
-                    fontSize: 10.sp,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const Divider(color: AppColors.borderLight, height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('المبلغ: ${proof['amount']}', style: TextStyle(color: AppColors.primaryAccent, fontWeight: FontWeight.bold, fontSize: 13.sp), overflow: TextOverflow.ellipsis),
-                    Text('رقم المحول: ${proof['sender_phone']}', style: TextStyle(color: AppColors.textMuted, fontSize: 11.sp), overflow: TextOverflow.ellipsis),
-                  ],
-                ),
-              ),
-              SizedBox(width: 8.w),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Full Image Proof Screenshot Viewer Button
-                  ElevatedButton.icon(
-                    onPressed: () => _showFullProofScreenshot(proof),
-                    icon: const Icon(Icons.remove_red_eye_outlined, size: 14, color: Colors.white),
-                    label: const Text('عرض الإيصال', style: TextStyle(color: Colors.white, fontSize: 11)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryAccent,
-                      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
-                    ),
-                  ),
-                  SizedBox(width: 8.w),
-
-                  // Approve / Reject Button
-                  if (!isVerified)
-                    IconButton(
-                      onPressed: () {
-                        setState(() {
-                          proof['is_verified'] = true;
-                          proof['status_ar'] = 'مقبول والمعاملة صحيحة ✓';
-                        });
-                        _showSnackbar('✓ تم اعتماد وإثبات دفع المعاملة ${proof['id']}', AppColors.successStart);
-                      },
-                      icon: const Icon(Icons.check_circle_rounded, color: AppColors.successStart),
-                      tooltip: 'اعتماد الدفع',
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showFullProofScreenshot(Map<String, dynamic> proof) {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          padding: EdgeInsets.all(16.w),
-          decoration: BoxDecoration(
-            color: AppColors.cardBg,
-            borderRadius: BorderRadius.circular(20.r),
-            border: Border.all(color: AppColors.borderLight),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'إيصال التحويل: ${proof['id']}',
-                    style: AppStyles.labelBold.copyWith(fontSize: 16.sp),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              SizedBox(height: 12.h),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12.r),
-                child: Container(
-                  height: 280.h,
-                  width: double.infinity,
-                  color: AppColors.inputBg,
-                  child: InteractiveViewer(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.receipt_long_rounded, color: AppColors.primaryAccent, size: 64.r),
-                          SizedBox(height: 12.h),
-                          Text('صورة إيصال تحويل ${proof['payment_method']}', style: AppStyles.labelBold),
-                          SizedBox(height: 4.h),
-                          Text('المبلغ: ${proof['amount']} | رقم المحول: ${proof['sender_phone']}', style: TextStyle(color: AppColors.textMuted, fontSize: 11.sp)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(height: 16.h),
-              ElevatedButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryAccent,
-                  minimumSize: Size(double.infinity, 44.h),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                ),
-                child: const Text('إغلاق المعاينة', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

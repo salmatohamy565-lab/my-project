@@ -50,3 +50,7 @@ app.*.map.json
 __pycache__/
 *.pyc
 
+ 
+scratch/
+*.apk
+*.aab

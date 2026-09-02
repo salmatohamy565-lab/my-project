@@ -60,6 +60,10 @@ class _ProductDetailsBottomSheetState extends State<_ProductDetailsBottomSheet> 
       imageUrl: product.imageUrl,
       categoryId: product.categoryId,
       createdAt: product.createdAt,
+      isOffer: product.isOffer,
+      originalPrice: product.originalPrice,
+      offerDiscount: product.offerDiscount,
+      offerDetails: product.offerDetails,
     );
     final authProvider = context.watch<AuthProvider>();
     final baseUrl = authProvider.baseUrl;
@@ -179,51 +183,117 @@ class _ProductDetailsBottomSheetState extends State<_ProductDetailsBottomSheet> 
                           ),
                         ),
                         SizedBox(height: 6.h),
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryAccent.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8.r),
-                          ),
-                          child: Text(
-                            'Bola Designs • منتج مخصص 🎨',
-                            style: TextStyle(
-                              color: AppColors.primaryAccent,
-                              fontSize: 11.sp,
-                              fontWeight: FontWeight.w600,
+                        Row(
+                          children: [
+                            if (activeProduct.isOffer) ...[
+                              Container(
+                                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE63946),
+                                  borderRadius: BorderRadius.circular(8.r),
+                                ),
+                                child: Text(
+                                  activeProduct.offerDiscount?.isNotEmpty == true ? activeProduct.offerDiscount! : 'عرض خاص 🔥',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11.sp,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 6.w),
+                            ],
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryAccent.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8.r),
+                              ),
+                              child: Text(
+                                'Bola Designs • منتج مخصص 🎨',
+                                style: TextStyle(
+                                  color: AppColors.primaryAccent,
+                                  fontSize: 11.sp,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ],
                     ),
                   ),
                   SizedBox(width: 12.w),
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: AppColors.primaryGradient),
-                      borderRadius: BorderRadius.circular(14.r),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primaryAccent.withOpacity(0.3),
-                          blurRadius: 8.r,
-                          offset: const Offset(0, 3),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 8.h),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: AppColors.primaryGradient),
+                          borderRadius: BorderRadius.circular(14.r),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primaryAccent.withOpacity(0.3),
+                              blurRadius: 8.r,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          activeProduct.price <= 0 ? 'تواصل معنا' : '${(activeProduct.price * _quantity).toStringAsFixed(0)} ج.م',
+                          style: AppStyles.labelBold.copyWith(
+                            color: Colors.white,
+                            fontSize: 16.sp,
+                          ),
+                        ),
+                      ),
+                      if (activeProduct.originalPrice != null && activeProduct.originalPrice! > activeProduct.price) ...[
+                        SizedBox(height: 4.h),
+                        Text(
+                          '${(activeProduct.originalPrice! * _quantity).toStringAsFixed(0)} ج.م',
+                          style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12.sp,
+                            decoration: TextDecoration.lineThrough,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
-                    ),
-                    child: Text(
-                      activeProduct.price <= 0 ? 'تواصل معنا' : '${(activeProduct.price * _quantity).toStringAsFixed(0)} ج.م',
-                      style: AppStyles.labelBold.copyWith(
-                        color: Colors.white,
-                        fontSize: 16.sp,
-                      ),
-                    ),
+                    ],
                   ),
                 ],
               ),
               SizedBox(height: 16.h),
               const Divider(color: AppColors.borderLight),
               SizedBox(height: 12.h),
+
+              // Offer Details Section (if exists)
+              if (activeProduct.offerDetails != null && activeProduct.offerDetails!.trim().isNotEmpty) ...[
+                Text(
+                  'تفاصيل ومميزات العرض الخاص 🎁',
+                  style: AppStyles.titleSmall.copyWith(fontSize: 14.sp, fontWeight: FontWeight.bold, color: const Color(0xFFE63946)),
+                ),
+                SizedBox(height: 8.h),
+                Container(
+                  padding: EdgeInsets.all(14.w),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE63946).withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(16.r),
+                    border: Border.all(color: const Color(0xFFE63946).withOpacity(0.2)),
+                  ),
+                  child: Text(
+                    activeProduct.offerDetails!,
+                    style: AppStyles.bodyDefault.copyWith(
+                      color: AppColors.textMain,
+                      fontSize: 13.sp,
+                      height: 1.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 14.h),
+              ],
 
               // Description & Specifications Section
               Text(
@@ -269,7 +339,7 @@ class _ProductDetailsBottomSheetState extends State<_ProductDetailsBottomSheet> 
                   activeProduct.name.contains('فوتوبلوك') ||
                   activeProduct.name.contains('جامبو') ||
                   activeProduct.name.contains('مسطرة') ||
-                  activeProduct.categoryId == 'frames') ...[
+                  activeProduct.categoryId?.toString() == 'frames') ...[
                 PhotoBlockPricingWidget(
                   onSizeSelected: (type, size, price) {
                     setState(() {

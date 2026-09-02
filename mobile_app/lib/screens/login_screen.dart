@@ -221,20 +221,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             if (value == null || value.trim().isEmpty) {
                               return 'يرجى إدخال اسم المستخدم أو الاسم';
                             }
-                            final trimmed = value.trim();
-                            final lower = trimmed.toLowerCase();
-
-                            final isStaff = lower == 'admin' ||
-                                            lower == 'employee' ||
-                                            lower.startsWith('admin_') ||
-                                            lower.startsWith('emp_');
-
-                            if (!isStaff && !trimmed.contains('@')) {
-                              final words = trimmed.split(RegExp(r'\s+'));
-                              if (words.length < 3) {
-                                return 'يرجى كتابة الاسم الثلاثي على الأقل أو البريد الإلكتروني';
-                              }
-                            }
                             return null;
                           },
 

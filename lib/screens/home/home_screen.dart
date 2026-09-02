@@ -12,7 +12,6 @@ import '../../providers/cart_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/notification_provider.dart';
-import '../../services/api_service.dart';
 import '../../widgets/app_logo_bar.dart';
 import '../../widgets/custom_bottom_nav_bar.dart';
 import '../../widgets/radial_background.dart';
@@ -20,6 +19,7 @@ import '../../widgets/whatsapp_contact_modal.dart';
 import '../../widgets/product_details_modal.dart';
 import 'category_detail_screen.dart';
 import '../cart/cart_screen.dart';
+import '../admin/admin_offers_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -163,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final filename = trimmedPath.split('/').last;
     final fullUrl = trimmedPath.startsWith('http://') || trimmedPath.startsWith('https://')
         ? trimmedPath
-        : 'https://kxeqayzxfvoedqvilcmp.supabase.co/storage/v1/object/public/product_images/$filename';
+        : 'https://qqsjlkrzeleothumkknu.supabase.co/storage/v1/object/public/product_images/$filename';
 
     return Image.network(
       fullUrl,
@@ -781,7 +781,53 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    final displayProducts = products;
+    final offerProducts = products.where((p) => p.isOffer).toList();
+
+    if (offerProducts.isEmpty) {
+      final user = context.watch<AuthProvider>().currentUser;
+      return Container(
+        margin: EdgeInsets.symmetric(horizontal: 20.w),
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 20.h),
+        decoration: BoxDecoration(
+          color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(color: AppColors.borderLight),
+        ),
+        child: Column(
+          children: [
+            Icon(Icons.local_offer_outlined, size: 36.r, color: AppColors.textMuted.withOpacity(0.5)),
+            SizedBox(height: 8.h),
+            Text(
+              'لا توجد عروض حالياً 🎁',
+              style: AppStyles.labelBold.copyWith(fontSize: 14.sp),
+            ),
+            SizedBox(height: 4.h),
+            Text(
+              'ترقبوا أقوى العروض والخصومات الحصرية القادمة قريباً!',
+              textAlign: TextAlign.center,
+              style: AppStyles.bodyMuted.copyWith(fontSize: 11.5.sp),
+            ),
+            if (user?.isAdmin ?? false) ...[
+              SizedBox(height: 12.h),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AdminOffersScreen()),
+                ),
+                icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                label: Text('إضافة عرض جديد (أدمن)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.sp)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryAccent,
+                  padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 6.h),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    final displayProducts = offerProducts;
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 16.w),
@@ -797,13 +843,13 @@ class _HomeScreenState extends State<HomeScreen> {
         itemCount: displayProducts.length,
         itemBuilder: (context, index) {
           final product = displayProducts[index];
-          final discount = (index % 2 == 0) ? '${12 + index * 3}% OFF' : null;
+          final discount = product.offerDiscount?.isNotEmpty == true ? product.offerDiscount! : 'عرض خاص 🔥';
 
           return Container(
             decoration: BoxDecoration(
               color: AppColors.cardBg,
               borderRadius: BorderRadius.circular(18.r),
-              border: Border.all(color: AppColors.borderLight),
+              border: Border.all(color: AppColors.primaryAccent.withOpacity(0.3)),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.04),
@@ -843,25 +889,25 @@ class _HomeScreenState extends State<HomeScreen> {
                               borderRadius: BorderRadius.circular(8.r),
                             ),
                             child: Text(
-                              'عرض خاص',
+                              discount,
                               style: TextStyle(color: Colors.white, fontSize: 10.sp, fontWeight: FontWeight.bold),
                             ),
                           ),
                         ),
-                        // Discount Badge
-                        if (discount != null)
+                        // Original price savings badge
+                        if (product.originalPrice != null && product.originalPrice! > product.price)
                           Positioned(
                             bottom: 8.h,
                             left: 8.w,
                             child: Container(
-                              padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+                              padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
                               decoration: BoxDecoration(
-                                color: AppColors.textDefault,
-                                borderRadius: BorderRadius.circular(8.r),
+                                color: Colors.black.withOpacity(0.75),
+                                borderRadius: BorderRadius.circular(6.r),
                               ),
                               child: Text(
-                                discount,
-                                style: TextStyle(color: Colors.white, fontSize: 10.sp, fontWeight: FontWeight.bold),
+                                'وفر ${(product.originalPrice! - product.price).toStringAsFixed(0)} ج.م',
+                                style: TextStyle(color: Colors.white, fontSize: 9.sp, fontWeight: FontWeight.bold),
                               ),
                             ),
                           ),
@@ -902,13 +948,28 @@ class _HomeScreenState extends State<HomeScreen> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                product.price <= 0 ? 'تواصل معنا' : '${product.price % 1 == 0 ? product.price.toInt() : product.price.toStringAsFixed(2)} ج.م',
-                                style: TextStyle(
-                                  color: AppColors.primaryAccent,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14.sp,
-                                ),
+                              Row(
+                                children: [
+                                  Text(
+                                    product.price <= 0 ? 'تواصل معنا' : '${product.price % 1 == 0 ? product.price.toInt() : product.price.toStringAsFixed(0)} ج.م',
+                                    style: TextStyle(
+                                      color: AppColors.primaryAccent,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13.5.sp,
+                                    ),
+                                  ),
+                                  if (product.originalPrice != null && product.originalPrice! > product.price) ...[
+                                    SizedBox(width: 4.w),
+                                    Text(
+                                      product.originalPrice!.toStringAsFixed(0),
+                                      style: TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontSize: 10.sp,
+                                        decoration: TextDecoration.lineThrough,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                               Container(
                                 padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),

@@ -63,8 +63,24 @@ class CategoryModel {
     );
   }
 
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CategoryModel && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+
   static _CategoryPreset _getPresetByName(String name) {
     final normName = _normalizeArabic(name);
+
+    if (normName.contains('عرض') || normName.contains('عروض') || normName.contains('خصم')) {
+      return const _CategoryPreset(
+        icon: Icons.local_offer_rounded,
+        gradientColors: [Color(0xFFE63946), Color(0xFFD90429)],
+        imageUrl: 'assets/product_images/special_offer.jpg',
+      );
+    }
 
     if (normName.contains('افراح') || normName.contains('زفاف') || normName.contains('مستلزمات')) {
       return const _CategoryPreset(

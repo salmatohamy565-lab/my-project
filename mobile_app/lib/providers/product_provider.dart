@@ -79,6 +79,8 @@ class ProductProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  List<ProductModel> get offerProducts => _products.where((p) => p.isOffer).toList();
+
   Future<bool> addProduct(
     String name,
     String description,
@@ -86,6 +88,10 @@ class ProductProvider extends ChangeNotifier {
     File? imageFile, {
     int? categoryId,
     int? subcategoryId,
+    bool isOffer = false,
+    double? originalPrice,
+    String? offerDiscount,
+    String? offerDetails,
   }) async {
     _isLoading = true;
     _errorMessage = null;
@@ -99,6 +105,10 @@ class ProductProvider extends ChangeNotifier {
         imageFile,
         categoryId: categoryId,
         subcategoryId: subcategoryId,
+        isOffer: isOffer,
+        originalPrice: originalPrice,
+        offerDiscount: offerDiscount,
+        offerDetails: offerDetails,
       );
       if (response.statusCode == 201 || response.statusCode == 200) {
         _isLoading = false;
@@ -123,6 +133,10 @@ class ProductProvider extends ChangeNotifier {
     File? imageFile, {
     int? categoryId,
     int? subcategoryId,
+    bool? isOffer,
+    double? originalPrice,
+    String? offerDiscount,
+    String? offerDetails,
   }) async {
     _isLoading = true;
     _errorMessage = null;
@@ -137,6 +151,46 @@ class ProductProvider extends ChangeNotifier {
         imageFile,
         categoryId: categoryId,
         subcategoryId: subcategoryId,
+        isOffer: isOffer,
+        originalPrice: originalPrice,
+        offerDiscount: offerDiscount,
+        offerDetails: offerDetails,
+      );
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        _isLoading = false;
+        await fetchProducts();
+        await fetchPublicProducts();
+        return true;
+      }
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> toggleProductOffer(
+    int productId,
+    bool isOffer, {
+    double? offerPrice,
+    double? originalPrice,
+    String? offerDiscount,
+    String? offerDetails,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _apiService.toggleProductOffer(
+        productId,
+        isOffer,
+        offerPrice: offerPrice,
+        originalPrice: originalPrice,
+        offerDiscount: offerDiscount,
+        offerDetails: offerDetails,
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
         _isLoading = false;

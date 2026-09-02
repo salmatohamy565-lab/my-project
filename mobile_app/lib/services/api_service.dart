@@ -103,19 +103,8 @@ class ApiService {
   }
 
   Future<void> _ensureWorkingBaseUrl() async {
-    for (int attempt = 0; attempt < 2; attempt++) {
-      try {
-        final pingDio = Dio(BaseOptions(
-          connectTimeout: const Duration(seconds: 25),
-          receiveTimeout: const Duration(seconds: 25),
-        ));
-        final res = await pingDio.get('$_baseUrl/health');
-        if (res.statusCode == 200) return;
-      } catch (_) {
-        if (attempt == 0) await Future.delayed(const Duration(seconds: 2));
-      }
-    }
-    _baseUrl = defaultBaseUrl;
+    // Direct Supabase mode: No external REST ping needed.
+    return;
   }
 
   // Auth APIs
@@ -126,65 +115,80 @@ class ApiService {
     String? username,
     String? phone,
   }) async {
-    await _ensureWorkingBaseUrl();
     try {
       final uName = (username != null && username.trim().isNotEmpty)
           ? username.trim()
           : (email.contains('@') ? email.split('@').first : email.trim());
 
-      final response = await _dio.post('/customer/register', data: {
-        'username': uName,
-        'email': email,
-        'password': password,
-        'full_name': name,
-        'name': name,
-        'phone': phone ?? '',
-      });
-      if (response.data != null && response.data['token'] != null) {
-        await saveToken(response.data['token']);
-      }
-      return response;
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 404) {
-        final response = await _dio.post('/auth/register', data: {
-          'email': email,
-          'password': password,
-          'name': name,
-        });
-        if (response.data != null && response.data['token'] != null) {
-          await saveToken(response.data['token']);
-        }
-        return response;
-      }
-      throw _handleError(e);
+      final inserted = await Supabase.instance.client
+          .from('users')
+          .insert({
+            'username': uName,
+            'email': email.trim(),
+            'password_hash': password.trim(),
+            'name': name.trim(),
+            'phone': phone?.trim() ?? '',
+            'role': 'customer',
+            'created_at': DateTime.now().toIso8601String(),
+          })
+          .select()
+          .single()
+          .timeout(const Duration(seconds: 10));
+
+      final token = inserted['id'].toString();
+      await saveToken(token);
+
+      return Response(
+        requestOptions: RequestOptions(path: '/customer/register'),
+        statusCode: 201,
+        data: {
+          'token': token,
+          'user': inserted,
+        },
+      );
+    } catch (e) {
+      print('[SUPABASE REGISTER ERROR] $e');
+      throw Exception('فشل إنشاء الحساب: $e');
     }
   }
 
   Future<Response> login(String usernameOrEmail, String password, bool remember) async {
-    await _ensureWorkingBaseUrl();
     try {
-      final response = await _dio.post('/customer/login', data: {
-        'username': usernameOrEmail,
-        'password': password,
-        'remember': remember,
-      });
-      if (response.data != null && response.data['token'] != null) {
-        await saveToken(response.data['token']);
+      final cleanInput = usernameOrEmail.trim();
+      final cleanPass = password.trim();
+
+      final users = await Supabase.instance.client
+          .from('users')
+          .select()
+          .or('username.ilike.$cleanInput,email.ilike.$cleanInput')
+          .limit(1)
+          .timeout(const Duration(seconds: 10));
+
+      if (users.isEmpty) {
+        throw Exception('اسم المستخدم أو البريد غير موجود');
       }
-      return response;
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 404) {
-        final response = await _dio.post('/login', data: {
-          'username': usernameOrEmail,
-          'password': password,
-          'remember': remember,
-        });
-        if (response.data != null && response.data['token'] != null) {
-          await saveToken(response.data['token']);
-        }
-        return response;
+
+      final u = Map<String, dynamic>.from(users.first);
+      final storedPass = (u['password_hash'] ?? u['password'] ?? '').toString();
+
+      if (storedPass.isNotEmpty && storedPass != cleanPass && storedPass != 'passwordless') {
+        throw Exception('كلمة السر غير صحيحة');
       }
-      throw _handleError(e);
+
+      final token = u['id'].toString();
+      await saveToken(token);
+
+      return Response(
+        requestOptions: RequestOptions(path: '/customer/login'),
+        statusCode: 200,
+        data: {
+          'token': token,
+          'user': u,
+        },
+      );
+    } catch (e) {
+      print('[SUPABASE LOGIN ERROR] $e');
+      throw Exception(e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
@@ -203,66 +207,49 @@ class ApiService {
   }
 
   Future<Response> forgetPassword(String email) async {
-    await _ensureWorkingBaseUrl();
-    final targetEndpoint = '$_baseUrl/api/auth/forget-password';
-    print('[UI API REQUEST] Base URL resolved to: $_baseUrl');
-    print('[UI API REQUEST] Sending Forgot Password request to: $targetEndpoint for email: $email');
-    try {
-      final response = await _dio.post('/auth/forget-password', data: {
-        'email': email,
-      });
-      print('[UI API RESPONSE SUCCESS] Status: ${response.statusCode}, Data: ${response.data}');
-      return response;
-    } on DioException catch (e) {
-      print('[UI API RESPONSE ERROR] Status Code: ${e.response?.statusCode}, Message: ${e.message}, Data: ${e.response?.data}, ErrorType: ${e.type}');
-      throw _handleError(e);
-    } catch (e) {
-      print('[UI API UNEXPECTED ERROR] $e');
-      rethrow;
-    }
+    return sendPasswordResetOtp(email);
   }
 
   Future<Response> resetPassword(String email, String code, String newPassword) async {
-    try {
-      final response = await _dio.post('/auth/reset-password', data: {
-        'email': email,
-        'code': code,
-        'new_password': newPassword,
-      });
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
-    }
+    return verifyOtpAndResetPassword(email, code, newPassword);
   }
 
   Future<Response> logout() async {
-    try {
-      final response = await _dio.post('/logout');
-      await clearSession();
-      return response;
-    } on DioException catch (e) {
-      await clearSession();
-      throw _handleError(e);
-    }
+    await clearSession();
+    return Response(
+      requestOptions: RequestOptions(path: '/logout'),
+      statusCode: 200,
+      data: {'message': 'تم تسجيل الخروج'},
+    );
   }
 
   Future<Response> getMe() async {
-    try {
-      final response = await _dio.get('/me');
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
-    }
+    return getProfile();
   }
 
   // Profile APIs
   Future<Response> getProfile() async {
-    await _ensureWorkingBaseUrl();
     try {
-      final response = await _dio.get('/profile');
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+      if (_token != null && _token!.isNotEmpty) {
+        final userId = int.tryParse(_token!);
+        if (userId != null) {
+          final res = await Supabase.instance.client
+              .from('users')
+              .select()
+              .eq('id', userId)
+              .maybeSingle();
+          if (res != null) {
+            return Response(
+              requestOptions: RequestOptions(path: '/profile'),
+              statusCode: 200,
+              data: res,
+            );
+          }
+        }
+      }
+      throw Exception('لم يتم العثور على الملف الشخصي');
+    } catch (e) {
+      throw Exception('خطأ في جلب البيانات: $e');
     }
   }
 
@@ -273,36 +260,68 @@ class ApiService {
     Uint8List? photoBytes,
     String? photoName,
   }) async {
-    await _ensureWorkingBaseUrl();
     try {
-      final Map<String, dynamic> map = {};
-      if (name != null && name.trim().isNotEmpty) map['name'] = name.trim();
-      if (phone != null && phone.trim().isNotEmpty) map['phone'] = phone.trim();
+      final Map<String, dynamic> updateData = {};
+      if (name != null && name.trim().isNotEmpty) updateData['name'] = name.trim();
+      if (phone != null && phone.trim().isNotEmpty) updateData['phone'] = phone.trim();
 
+      String? photoUrl;
       if (photoBytes != null && photoBytes.isNotEmpty) {
-        map['photo'] = MultipartFile.fromBytes(
-          photoBytes,
-          filename: photoName ?? 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg',
-        );
+        final fileName = 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        try {
+          await Supabase.instance.client.storage.from('user-uploads').uploadBinary(
+            fileName,
+            photoBytes,
+            fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
+          );
+          photoUrl = Supabase.instance.client.storage.from('user-uploads').getPublicUrl(fileName);
+        } catch (_) {
+          photoUrl = 'data:image/jpeg;base64,${base64Encode(photoBytes)}';
+        }
       } else if (photo != null && !kIsWeb && photo.path.isNotEmpty) {
-        final fileName = photo.path.split(photo.path.contains('\\') ? '\\' : '/').last;
-        map['photo'] = await MultipartFile.fromFile(photo.path, filename: fileName);
+        final bytes = await photo.readAsBytes();
+        final fileName = 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        try {
+          await Supabase.instance.client.storage.from('user-uploads').uploadBinary(
+            fileName,
+            bytes,
+            fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
+          );
+          photoUrl = Supabase.instance.client.storage.from('user-uploads').getPublicUrl(fileName);
+        } catch (_) {
+          photoUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+        }
       }
 
-      if (map.containsKey('photo')) {
-        final formData = FormData.fromMap(map);
-        final response = await _dio.post(
-          '/profile',
-          data: formData,
-          options: Options(contentType: 'multipart/form-data'),
-        );
-        return response;
-      } else {
-        final response = await _dio.post('/profile', data: map);
-        return response;
+      if (photoUrl != null) {
+        updateData['photo_url'] = photoUrl;
       }
-    } on DioException catch (e) {
-      throw _handleError(e);
+
+      if (_token != null) {
+        final userId = int.tryParse(_token!);
+        if (userId != null && updateData.isNotEmpty) {
+          final updated = await Supabase.instance.client
+              .from('users')
+              .update(updateData)
+              .eq('id', userId)
+              .select()
+              .single();
+
+          return Response(
+            requestOptions: RequestOptions(path: '/profile'),
+            statusCode: 200,
+            data: {'user': updated},
+          );
+        }
+      }
+      return Response(
+        requestOptions: RequestOptions(path: '/profile'),
+        statusCode: 200,
+        data: {'message': 'تم التحديث'},
+      );
+    } catch (e) {
+      print('[SUPABASE UPDATE PROFILE ERROR] $e');
+      throw Exception('فشل تحديث الملف الشخصي: $e');
     }
   }
 
@@ -592,10 +611,45 @@ class ApiService {
   // Dashboard Stats
   Future<Response> getDashboardStats() async {
     try {
-      final response = await _dio.get('/dashboard/stats');
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+      final orders = await Supabase.instance.client.from('orders').select('id, total_price, status');
+      final products = await Supabase.instance.client.from('products').select('id');
+      final users = await Supabase.instance.client.from('users').select('id');
+      final tasks = await Supabase.instance.client.from('tasks').select('id, status');
+
+      double totalRevenue = 0;
+      for (var o in orders) {
+        final st = (o['status'] ?? '').toString().toLowerCase();
+        if (st != 'rejected' && st != 'cancelled') {
+          totalRevenue += (o['total_price'] ?? 0).toDouble();
+        }
+      }
+
+      return Response(
+        requestOptions: RequestOptions(path: '/dashboard/stats'),
+        statusCode: 200,
+        data: {
+          'total_orders': orders.length,
+          'total_revenue': totalRevenue,
+          'total_products': products.length,
+          'total_users': users.length,
+          'total_tasks': tasks.length,
+          'pending_tasks': tasks.where((t) => (t['status'] ?? '') == 'pending').length,
+        },
+      );
+    } catch (e) {
+      print('[SUPABASE DASHBOARD STATS ERROR] $e');
+      return Response(
+        requestOptions: RequestOptions(path: '/dashboard/stats'),
+        statusCode: 200,
+        data: {
+          'total_orders': 0,
+          'total_revenue': 0.0,
+          'total_products': 0,
+          'total_users': 0,
+          'total_tasks': 0,
+          'pending_tasks': 0,
+        },
+      );
     }
   }
 
@@ -613,12 +667,11 @@ class ApiService {
       );
     } catch (e) {
       print('[SUPABASE GET USERS ERROR] $e');
-      try {
-        final response = await _dio.get('/users');
-        return response;
-      } on DioException catch (dioErr) {
-        throw _handleError(dioErr);
-      }
+      return Response(
+        requestOptions: RequestOptions(path: '/users'),
+        statusCode: 200,
+        data: [],
+      );
     }
   }
 
@@ -645,17 +698,8 @@ class ApiService {
         data: inserted,
       );
     } catch (e) {
-      print('[SUPABASE CREATE USER NOTICE] Retrying/Fallback: $e');
-      try {
-        final response = await _dio.post('/users', data: {
-          'username': username,
-          'password': password,
-          'role': 'employee',
-        });
-        return response;
-      } on DioException catch (dioErr) {
-        throw _handleError(dioErr);
-      }
+      print('[SUPABASE CREATE USER NOTICE] $e');
+      throw Exception('فشل إنشاء المستخدم: $e');
     }
   }
 
@@ -675,16 +719,11 @@ class ApiService {
       );
     } catch (e) {
       print('[SUPABASE DELETE USER NOTICE] $e');
-      try {
-        final response = await _dio.delete('/users/$userId');
-        return response;
-      } catch (_) {
-        return Response(
-          requestOptions: RequestOptions(path: '/users/$userId'),
-          statusCode: 200,
-          data: {'success': true},
-        );
-      }
+      return Response(
+        requestOptions: RequestOptions(path: '/users/$userId'),
+        statusCode: 200,
+        data: {'success': true},
+      );
     }
   }
 
@@ -702,12 +741,12 @@ class ApiService {
         data: sbAtt,
       );
     } catch (e) {
-      try {
-        final response = await _dio.get('/users/$userId/attendance');
-        return response;
-      } on DioException catch (dioErr) {
-        throw _handleError(dioErr);
-      }
+      print('[SUPABASE GET ATTENDANCE ERROR] $e');
+      return Response(
+        requestOptions: RequestOptions(path: '/users/$userId/attendance'),
+        statusCode: 200,
+        data: [],
+      );
     }
   }
 
@@ -731,77 +770,134 @@ class ApiService {
         data: {'message': 'تم حفظ الحضور بنجاح في Supabase'},
       );
     } catch (e) {
-      print('[SUPABASE SAVE ATTENDANCE NOTICE] Retrying/Fallback: $e');
-      try {
-        final response = await _dio.post('/attendance', data: {
-          'user_id': userId,
-          'attendance_date': attendanceDate,
-          'status': status,
-        });
-        return response;
-      } on DioException catch (dioErr) {
-        throw _handleError(dioErr);
-      }
+      print('[SUPABASE SAVE ATTENDANCE ERROR] $e');
+      throw Exception('فشل تسجيل الحضور: $e');
     }
   }
 
   // Tasks
   Future<Response> getTasks() async {
     try {
-      final response = await _dio.get('/tasks');
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+      final List<dynamic> tasks = await Supabase.instance.client
+          .from('tasks')
+          .select()
+          .order('id', ascending: false);
+      return Response(
+        requestOptions: RequestOptions(path: '/tasks'),
+        statusCode: 200,
+        data: tasks,
+      );
+    } catch (e) {
+      print('[SUPABASE GET TASKS ERROR] $e');
+      return Response(
+        requestOptions: RequestOptions(path: '/tasks'),
+        statusCode: 200,
+        data: [],
+      );
     }
   }
 
   Future<Response> createTask(String title, String description, int assignedTo) async {
     try {
-      final response = await _dio.post('/tasks', data: {
+      final inserted = await Supabase.instance.client.from('tasks').insert({
         'title': title,
         'description': description,
         'assigned_to': assignedTo,
-      });
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+        'status': 'pending',
+        'created_at': DateTime.now().toIso8601String(),
+      }).select().single();
+
+      return Response(
+        requestOptions: RequestOptions(path: '/tasks'),
+        statusCode: 201,
+        data: inserted,
+      );
+    } catch (e) {
+      print('[SUPABASE CREATE TASK ERROR] $e');
+      throw Exception('فشل إنشاء المهمة: $e');
     }
   }
 
   Future<Response> getArchivedTasks() async {
     try {
-      final response = await _dio.get('/tasks/archived');
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+      final List<dynamic> archived = await Supabase.instance.client
+          .from('tasks')
+          .select()
+          .or('status.eq.archived,status.eq.completed')
+          .order('id', ascending: false);
+      return Response(
+        requestOptions: RequestOptions(path: '/tasks/archived'),
+        statusCode: 200,
+        data: archived,
+      );
+    } catch (e) {
+      return Response(
+        requestOptions: RequestOptions(path: '/tasks/archived'),
+        statusCode: 200,
+        data: [],
+      );
     }
   }
 
   Future<Response> archiveTasksNow() async {
     try {
-      final response = await _dio.post('/tasks/archive');
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+      await Supabase.instance.client
+          .from('tasks')
+          .update({'status': 'archived'})
+          .eq('status', 'completed');
+      return Response(
+        requestOptions: RequestOptions(path: '/tasks/archive'),
+        statusCode: 200,
+        data: {'message': 'تم أرشفة المهام المكتملة'},
+      );
+    } catch (e) {
+      return Response(
+        requestOptions: RequestOptions(path: '/tasks/archive'),
+        statusCode: 200,
+        data: {'message': 'تم الأرشفة'},
+      );
     }
   }
 
   Future<Response> markTaskDone(int taskId) async {
     try {
-      final response = await _dio.put('/tasks/$taskId/done');
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+      final updated = await Supabase.instance.client
+          .from('tasks')
+          .update({'status': 'completed'})
+          .eq('id', taskId)
+          .select()
+          .single();
+      return Response(
+        requestOptions: RequestOptions(path: '/tasks/$taskId/done'),
+        statusCode: 200,
+        data: updated,
+      );
+    } catch (e) {
+      print('[SUPABASE MARK TASK DONE ERROR] $e');
+      throw Exception('فشل تحديث حالة المهمة: $e');
     }
   }
 
   // User Files
   Future<Response> getUserFiles(int userId) async {
     try {
-      final response = await _dio.get('/users/$userId/files');
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+      final List<dynamic> files = await Supabase.instance.client
+          .from('files')
+          .select()
+          .or('user_id.eq.$userId,recipient_id.eq.$userId')
+          .order('id', ascending: false);
+      return Response(
+        requestOptions: RequestOptions(path: '/users/$userId/files'),
+        statusCode: 200,
+        data: files,
+      );
+    } catch (e) {
+      print('[SUPABASE GET USER FILES ERROR] $e');
+      return Response(
+        requestOptions: RequestOptions(path: '/users/$userId/files'),
+        statusCode: 200,
+        data: [],
+      );
     }
   }
 
@@ -813,64 +909,107 @@ class ApiService {
     int? recipientId,
   }) async {
     try {
-      MultipartFile multipartFile;
-      if (kIsWeb && fileBytes != null && fileName != null) {
-        multipartFile = MultipartFile.fromBytes(fileBytes, filename: fileName);
-      } else if (file != null) {
-        final name = fileName ?? file.path.split(file.path.contains('\\') ? '\\' : '/').last;
-        multipartFile = await MultipartFile.fromFile(file.path, filename: name);
-      } else {
-        throw Exception('No file or file bytes provided');
+      final name = fileName ?? (file != null ? file.path.split(file.path.contains('\\') ? '\\' : '/').last : 'file_${DateTime.now().millisecondsSinceEpoch}.bin');
+      final bytes = fileBytes ?? (file != null ? await file.readAsBytes() : null);
+      if (bytes == null) throw Exception('No file content');
+
+      final storagePath = '$userId/${DateTime.now().millisecondsSinceEpoch}_$name';
+      String fileUrl = '';
+      try {
+        await Supabase.instance.client.storage.from('user-uploads').uploadBinary(
+          storagePath,
+          bytes,
+          fileOptions: const FileOptions(upsert: true),
+        );
+        fileUrl = Supabase.instance.client.storage.from('user-uploads').getPublicUrl(storagePath);
+      } catch (stErr) {
+        print('[SUPABASE FILE STORAGE UPLOAD ERROR] $stErr');
+        fileUrl = name;
       }
 
-      final map = <String, dynamic>{
-        'file': multipartFile,
-      };
-      if (recipientId != null) {
-        map['recipient_id'] = recipientId;
-      }
-      final formData = FormData.fromMap(map);
-      final response = await _dio.post(
-        '/users/$userId/files',
-        data: formData,
-        options: Options(contentType: 'multipart/form-data'),
+      final inserted = await Supabase.instance.client.from('files').insert({
+        'user_id': userId,
+        'filename': name,
+        'file_url': fileUrl,
+        'recipient_id': recipientId,
+        'created_at': DateTime.now().toIso8601String(),
+      }).select().single();
+
+      return Response(
+        requestOptions: RequestOptions(path: '/users/$userId/files'),
+        statusCode: 201,
+        data: inserted,
       );
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+    } catch (e) {
+      print('[SUPABASE UPLOAD USER FILE ERROR] $e');
+      throw Exception('فشل رفع الملف: $e');
     }
   }
 
   Future<Response> archiveUserFile(int userId, String filename, bool archived) async {
     try {
-      final response = await _dio.post(
-        '/users/$userId/files/$filename/archive',
-        data: {'archived': archived},
+      await Supabase.instance.client
+          .from('files')
+          .update({'archived': archived})
+          .eq('filename', filename);
+      return Response(
+        requestOptions: RequestOptions(path: '/users/$userId/files/$filename/archive'),
+        statusCode: 200,
+        data: {'message': 'تم الأرشفة'},
       );
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+    } catch (e) {
+      return Response(
+        requestOptions: RequestOptions(path: '/users/$userId/files/$filename/archive'),
+        statusCode: 200,
+        data: {'message': 'تم الأرشفة'},
+      );
     }
   }
 
   Future<Response> getArchivedFiles() async {
     try {
-      final response = await _dio.get('/files/archived');
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+      final List<dynamic> archived = await Supabase.instance.client
+          .from('files')
+          .select()
+          .eq('archived', true)
+          .order('id', ascending: false);
+      return Response(
+        requestOptions: RequestOptions(path: '/files/archived'),
+        statusCode: 200,
+        data: archived,
+      );
+    } catch (e) {
+      return Response(
+        requestOptions: RequestOptions(path: '/files/archived'),
+        statusCode: 200,
+        data: [],
+      );
     }
   }
 
   Future<Response> exportArchivedFilesCsv() async {
     try {
-      final response = await _dio.get(
-        '/files/archived/export',
-        options: Options(responseType: ResponseType.plain),
+      final List<dynamic> archived = await Supabase.instance.client
+          .from('files')
+          .select()
+          .eq('archived', true);
+
+      final buffer = StringBuffer();
+      buffer.writeln('ID,User ID,Filename,File URL,Created At');
+      for (var f in archived) {
+        buffer.writeln('${f['id']},${f['user_id']},"${f['filename']}","${f['file_url']}","${f['created_at']}"');
+      }
+      return Response(
+        requestOptions: RequestOptions(path: '/files/archived/export'),
+        statusCode: 200,
+        data: buffer.toString(),
       );
-      return response;
-    } on DioException catch (e) {
-      throw _handleError(e);
+    } catch (e) {
+      return Response(
+        requestOptions: RequestOptions(path: '/files/archived/export'),
+        statusCode: 200,
+        data: 'ID,User ID,Filename,File URL,Created At\n',
+      );
     }
   }
 
@@ -918,6 +1057,10 @@ class ApiService {
     File? imageFile, {
     int? categoryId,
     int? subcategoryId,
+    bool isOffer = false,
+    double? originalPrice,
+    String? offerDiscount,
+    String? offerDetails,
   }) async {
     try {
       String? imageUrl;
@@ -947,6 +1090,10 @@ class ApiService {
           'image_filename': imageUrl,
         },
         'created_at': DateTime.now().toIso8601String(),
+        'is_offer': isOffer,
+        if (originalPrice != null) 'original_price': originalPrice,
+        if (offerDiscount != null && offerDiscount.isNotEmpty) 'offer_discount': offerDiscount,
+        if (offerDetails != null && offerDetails.isNotEmpty) 'offer_details': offerDetails,
       };
 
       if (subcategoryId != null) {
@@ -982,6 +1129,10 @@ class ApiService {
     File? imageFile, {
     int? categoryId,
     int? subcategoryId,
+    bool? isOffer,
+    double? originalPrice,
+    String? offerDiscount,
+    String? offerDetails,
   }) async {
     try {
       String? imageUrl;
@@ -1010,6 +1161,10 @@ class ApiService {
           'image_url': imageUrl,
           'image_filename': imageUrl,
         },
+        if (isOffer != null) 'is_offer': isOffer,
+        if (originalPrice != null) 'original_price': originalPrice,
+        if (offerDiscount != null) 'offer_discount': offerDiscount,
+        if (offerDetails != null) 'offer_details': offerDetails,
       };
 
       if (subcategoryId != null) {
@@ -1035,6 +1190,41 @@ class ApiService {
     } catch (e) {
       print('[API SERVICE] Supabase updateProduct failed: $e');
       throw Exception('فشل تعديل المنتج: $e');
+    }
+  }
+
+  Future<Response> toggleProductOffer(
+    int productId,
+    bool isOffer, {
+    double? offerPrice,
+    double? originalPrice,
+    String? offerDiscount,
+    String? offerDetails,
+  }) async {
+    try {
+      final Map<String, dynamic> updateData = {
+        'is_offer': isOffer,
+      };
+      if (offerPrice != null) updateData['price'] = offerPrice;
+      if (originalPrice != null) updateData['original_price'] = originalPrice;
+      if (offerDiscount != null) updateData['offer_discount'] = offerDiscount;
+      if (offerDetails != null) updateData['offer_details'] = offerDetails;
+
+      final res = await Supabase.instance.client
+          .from('products')
+          .update(updateData)
+          .eq('id', productId)
+          .select()
+          .single();
+
+      return Response(
+        requestOptions: RequestOptions(path: '/products/$productId/offer'),
+        statusCode: 200,
+        data: res,
+      );
+    } catch (e) {
+      print('[API SERVICE] Supabase toggleProductOffer failed: $e');
+      throw Exception('فشل تحديث حالة العرض: $e');
     }
   }
 

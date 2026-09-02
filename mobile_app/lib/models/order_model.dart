@@ -34,6 +34,37 @@ class OrderModel {
     this.createdAt,
   });
 
+  String get extractedAddress {
+    if (customerAddress == null || customerAddress!.trim().isEmpty) return '';
+    final str = customerAddress!.trim();
+    if (str.contains('رقم التحويل:')) {
+      final parts = str.split(RegExp(r'[•▪\-,|]?\s*رقم التحويل:'));
+      var addr = parts.first.trim();
+      if (addr.startsWith('العنوان:')) {
+        addr = addr.replaceFirst('العنوان:', '').trim();
+      }
+      return addr.isNotEmpty ? addr : str;
+    }
+    if (str.startsWith('العنوان:')) {
+      return str.replaceFirst('العنوان:', '').trim();
+    }
+    return str;
+  }
+
+  String get extractedTransferPhone {
+    if (customerAddress != null && customerAddress!.contains('رقم التحويل:')) {
+      final match = RegExp(r'رقم التحويل:\s*([0-9\+\s]+)').firstMatch(customerAddress!);
+      if (match != null && match.group(1) != null) {
+        final digits = match.group(1)!.trim();
+        if (digits.isNotEmpty) return digits;
+      }
+    }
+    if (customerPhone.isNotEmpty && customerPhone.trim().replaceAll(RegExp(r'[^\d]'), '').length >= 10) {
+      return customerPhone.trim();
+    }
+    return '';
+  }
+
   String get statusArabic {
     switch (status.toLowerCase()) {
       case 'pending':
@@ -63,7 +94,7 @@ class OrderModel {
       return url;
     }
     if (url.startsWith('proof_') || (!url.contains('/') && url.contains('.'))) {
-      return 'https://kxeqayzxfvoedqvilcmp.supabase.co/storage/v1/object/public/payment-proofs/$url';
+      return 'https://qqsjlkrzeleothumkknu.supabase.co/storage/v1/object/public/payment-proofs/$url';
     }
     String cleanBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
     String cleanPath = url.startsWith('/') ? url : '/$url';

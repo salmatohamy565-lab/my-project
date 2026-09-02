@@ -814,14 +814,100 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> with SingleTicker
                 if (order.customerPhone.isNotEmpty)
                   Padding(
                     padding: EdgeInsets.only(bottom: 6.h, right: 24.w),
-                    child: Text(order.customerPhone, style: AppStyles.bodyMuted.copyWith(fontSize: 12.sp)),
+                    child: Text('هاتف العميل: ${order.customerPhone}', style: AppStyles.bodyMuted.copyWith(fontSize: 12.sp)),
                   ),
 
-                if (order.customerAddress != null && order.customerAddress!.isNotEmpty)
-                  _buildInfoRow(Icons.location_on_outlined, 'عنوان التوصيل بالكامل', order.customerAddress!),
+                // 1. Full Delivery Address (Multiline without truncation)
+                Builder(
+                  builder: (_) {
+                    final cleanAddress = order.extractedAddress.isNotEmpty
+                        ? order.extractedAddress
+                        : (order.customerAddress ?? '');
+                    if (cleanAddress.isNotEmpty) {
+                      return _buildInfoRow(
+                        Icons.location_on_outlined,
+                        'عنوان التوصيل بالكامل',
+                        cleanAddress,
+                        allowMultiLine: true,
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+
+                // 2. Dedicated Prominent Transfer Phone Card
+                Builder(
+                  builder: (_) {
+                    final transferNumber = order.extractedTransferPhone;
+                    if (transferNumber.isNotEmpty) {
+                      return Container(
+                        margin: EdgeInsets.symmetric(vertical: 6.h),
+                        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryAccent.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12.r),
+                          border: Border.all(color: AppColors.primaryAccent.withOpacity(0.3), width: 1.2),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(6.r),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryAccent.withOpacity(0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.account_balance_wallet_rounded, color: AppColors.primaryAccent, size: 16.r),
+                            ),
+                            SizedBox(width: 8.w),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'رقم محفظة / هاتف التحويل:',
+                                    style: AppStyles.bodyMuted.copyWith(fontSize: 11.sp, fontWeight: FontWeight.bold, color: AppColors.primaryAccent),
+                                  ),
+                                  SizedBox(height: 2.h),
+                                  Text(
+                                    transferNumber,
+                                    style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.bold, fontSize: 14.sp, letterSpacing: 1.1),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () => _copyToClipboard(transferNumber, 'رقم التحويل'),
+                              icon: Icon(Icons.copy_rounded, color: AppColors.primaryAccent, size: 18.r),
+                              tooltip: 'نسخ رقم التحويل',
+                              constraints: const BoxConstraints(),
+                              padding: EdgeInsets.all(4.r),
+                            ),
+                            SizedBox(width: 6.w),
+                            IconButton(
+                              onPressed: () => _makeCall(transferNumber),
+                              icon: const Icon(Icons.phone_rounded, color: Colors.green, size: 18),
+                              tooltip: 'اتصال',
+                              constraints: const BoxConstraints(),
+                              padding: EdgeInsets.all(4.r),
+                            ),
+                            SizedBox(width: 6.w),
+                            IconButton(
+                              onPressed: () => _openWhatsApp(transferNumber, order.id),
+                              icon: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.teal, size: 18),
+                              tooltip: 'واتساب',
+                              constraints: const BoxConstraints(),
+                              padding: EdgeInsets.all(4.r),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
 
                 SizedBox(height: 6.h),
-                _buildInfoRow(Icons.shopping_bag_outlined, 'المنتجات والكميات', order.itemsSummary.isNotEmpty ? order.itemsSummary : 'طلب منتجات'),
+                _buildInfoRow(Icons.shopping_bag_outlined, 'المنتجات والكميات', order.itemsSummary.isNotEmpty ? order.itemsSummary : 'طلب منتجات', allowMultiLine: true),
 
                 if (order.products.isNotEmpty) ...[
                   SizedBox(height: 8.h),
@@ -1072,10 +1158,22 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> with SingleTicker
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String label, String value) {
+  void _copyToClipboard(String text, String label) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('✓ تم نسخ $label: $text', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: AppColors.successStart,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value, {bool allowMultiLine = false}) {
     return Padding(
       padding: EdgeInsets.only(bottom: 6.h),
       child: Row(
+        crossAxisAlignment: allowMultiLine ? CrossAxisAlignment.start : CrossAxisAlignment.center,
         children: [
           Icon(icon, size: 18.r, color: AppColors.textMuted),
           SizedBox(width: 8.w),
@@ -1084,7 +1182,8 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> with SingleTicker
             child: Text(
               value,
               style: AppStyles.bodyDefault.copyWith(fontWeight: FontWeight.bold, fontSize: 13.sp),
-              overflow: TextOverflow.ellipsis,
+              overflow: allowMultiLine ? TextOverflow.visible : TextOverflow.ellipsis,
+              softWrap: true,
             ),
           ),
         ],

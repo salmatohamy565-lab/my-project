@@ -7,6 +7,10 @@ class ProductModel {
   final int? categoryId;
   final int? subcategoryId;
   final DateTime? createdAt;
+  final bool isOffer;
+  final double? originalPrice;
+  final String? offerDiscount;
+  final String? offerDetails;
 
   ProductModel({
     required this.id,
@@ -17,6 +21,10 @@ class ProductModel {
     this.categoryId,
     this.subcategoryId,
     this.createdAt,
+    this.isOffer = false,
+    this.originalPrice,
+    this.offerDiscount,
+    this.offerDetails,
   });
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
@@ -26,7 +34,7 @@ class ProductModel {
         img = img.substring(1);
       }
       if (!img.startsWith('uploads/')) {
-        img = 'https://kxeqayzxfvoedqvilcmp.supabase.co/storage/v1/object/public/product_images/$img';
+        img = 'https://qqsjlkrzeleothumkknu.supabase.co/storage/v1/object/public/product_images/$img';
       }
     }
 
@@ -35,6 +43,9 @@ class ProductModel {
       if (val is int) return val;
       return int.tryParse(val.toString());
     }
+
+    final bool offerFlag = json['is_offer'] == true || json['is_offer'] == 'true' || json['is_offer'] == 1;
+    final double? origPrice = (json['original_price'] as num?)?.toDouble();
 
     return ProductModel(
       id: json['id'] is int ? json['id'] : (int.tryParse(json['id']?.toString() ?? '0') ?? 0),
@@ -45,6 +56,10 @@ class ProductModel {
       categoryId: parseId(json['category_id']),
       subcategoryId: parseId(json['subcategory_id']),
       createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
+      isOffer: offerFlag,
+      originalPrice: origPrice,
+      offerDiscount: json['offer_discount']?.toString(),
+      offerDetails: json['offer_details']?.toString(),
     );
   }
 
@@ -58,6 +73,10 @@ class ProductModel {
       'category_id': categoryId,
       'subcategory_id': subcategoryId,
       'created_at': createdAt?.toIso8601String(),
+      'is_offer': isOffer,
+      'original_price': originalPrice,
+      'offer_discount': offerDiscount,
+      'offer_details': offerDetails,
     };
   }
 

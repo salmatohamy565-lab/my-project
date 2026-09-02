@@ -539,6 +539,79 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> with SingleTicker
             ],
           ),
           SizedBox(height: 4.h),
+          Builder(
+            builder: (_) {
+              final cleanAddress = order.extractedAddress.isNotEmpty
+                  ? order.extractedAddress
+                  : (order.customerAddress ?? '');
+              if (cleanAddress.isNotEmpty) {
+                return Padding(
+                  padding: EdgeInsets.only(bottom: 4.h),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.location_on_outlined, size: 16, color: AppColors.primaryAccent),
+                      SizedBox(width: 6.w),
+                      Text('العنوان: ', style: AppStyles.bodyMuted.copyWith(fontSize: 12.sp)),
+                      Expanded(
+                        child: Text(
+                          cleanAddress,
+                          style: AppStyles.bodyDefault.copyWith(fontSize: 12.sp, fontWeight: FontWeight.bold),
+                          softWrap: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+          Builder(
+            builder: (_) {
+              final transferNumber = order.extractedTransferPhone;
+              if (transferNumber.isNotEmpty) {
+                return Container(
+                  margin: EdgeInsets.symmetric(vertical: 4.h),
+                  padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryAccent.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(10.r),
+                    border: Border.all(color: AppColors.primaryAccent.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.account_balance_wallet_rounded, color: AppColors.primaryAccent, size: 16.r),
+                      SizedBox(width: 6.w),
+                      Text('رقم التحويل: ', style: AppStyles.bodyMuted.copyWith(fontSize: 11.sp, fontWeight: FontWeight.bold, color: AppColors.primaryAccent)),
+                      Expanded(
+                        child: Text(
+                          transferNumber,
+                          style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.bold, fontSize: 13.sp, letterSpacing: 1.1),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => _makeCall(transferNumber),
+                        icon: const Icon(Icons.phone_rounded, color: Colors.green, size: 16),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: 'اتصال',
+                      ),
+                      SizedBox(width: 8.w),
+                      IconButton(
+                        onPressed: () => _openWhatsApp(transferNumber, order.id),
+                        icon: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.teal, size: 16),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: 'واتساب',
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
           Row(
             children: [
               const Icon(Icons.shopping_bag_outlined, size: 16, color: AppColors.primaryAccent),

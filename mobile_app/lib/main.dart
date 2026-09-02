@@ -21,10 +21,10 @@ void main() async {
   await NotificationService().init();
   
   await Supabase.initialize(
-    url: 'https://kxeqayzxfvoedqvilcmp.supabase.co',
+    url: 'https://qqsjlkrzeleothumkknu.supabase.co',
     anonKey: const String.fromEnvironment(
       'SUPABASE_ANON_KEY',
-      defaultValue: 'sb_publishable_n2OnkbUJFsVNTdRdDeuxUA_wxUe7z4E',
+      defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxc2psa3J6ZWxlb3RodW1ra251Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNTY0MTIsImV4cCI6MjEwMzkzMjQxMn0.p0aKFKpQNy4l6WNVLN6wptPvaCwZP2PsEffqtc96QZ8',
     ),
   );
 
