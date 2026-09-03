@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -676,13 +677,13 @@ class _AdminOffersScreenState extends State<AdminOffersScreen> with SingleTicker
                             child: Image.file(_selectedImage!, fit: BoxFit.cover, width: double.infinity),
                           )
                         : Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.add_photo_alternate_outlined, size: 36.r, color: AppColors.primaryAccent),
-                          SizedBox(height: 6.h),
-                          Text('انقر هنا لاختيار صورة للمنتج', style: TextStyle(color: AppColors.primaryAccent, fontSize: 12.sp, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.add_photo_alternate_outlined, size: 36.r, color: AppColors.primaryAccent),
+                              SizedBox(height: 6.h),
+                              Text('انقر هنا لاختيار صورة للمنتج', style: TextStyle(color: AppColors.primaryAccent, fontSize: 12.sp, fontWeight: FontWeight.bold)),
+                            ],
+                          )),
               ),
             ),
             SizedBox(height: 12.h),
