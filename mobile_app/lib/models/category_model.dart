@@ -37,7 +37,9 @@ class CategoryModel {
       title: catName,
       icon: preset.icon,
       gradientColors: preset.gradientColors,
-      imageUrl: preset.imageUrl,
+      imageUrl: (json['image_url'] != null && json['image_url'].toString().trim().isNotEmpty)
+          ? json['image_url'].toString().trim()
+          : preset.imageUrl,
       subCategoriesList: subcats,
       subCategoriesCount: count,
     );
