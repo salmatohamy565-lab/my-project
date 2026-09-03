@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
@@ -6,13 +7,16 @@ import '../../constants/app_colors.dart';
 import '../../constants/app_styles.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/product_provider.dart';
+import '../../providers/order_provider.dart';
+import '../../providers/cart_provider.dart';
+import '../../models/order_model.dart';
+import '../../services/api_service.dart';
 import '../../widgets/radial_background.dart';
 import '../../widgets/app_logo_bar.dart';
 import '../../widgets/animations.dart';
 import '../../widgets/payment_methods_modal.dart';
 import '../../widgets/product_image_widget.dart';
 import '../../widgets/product_details_modal.dart';
-import '../../providers/order_provider.dart';
 import '../login_screen.dart';
 
 class PublicCatalogScreen extends StatefulWidget {
