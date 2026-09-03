@@ -1,6 +1,6 @@
-# bola_designs
+# Bola Designs - Mobile App & Dashboard
 
-A new Flutter project.
+Official Bola Designs application with Supabase integration and administrative management.
 
 ## Getting Started
 
