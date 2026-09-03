@@ -88,7 +88,7 @@ class CategoryModel {
       return const _CategoryPreset(
         icon: Icons.favorite_rounded,
         gradientColors: [Color(0xFF343A40), Color(0xFF212529)],
-        imageUrl: 'assets/product_images/wedding_invitation.jpg',
+        imageUrl: 'assets/product_images/wedding_invitation_ribbon.jpg',
       );
     }
     if (normName.contains('فوتوبلوك') || normName.contains('براويز') || normName.contains('بروار')) {
@@ -102,7 +102,7 @@ class CategoryModel {
       return const _CategoryPreset(
         icon: Icons.local_cafe_rounded,
         gradientColors: [Color(0xFF6C757D), Color(0xFF495057)],
-        imageUrl: 'assets/product_images/family_mug.jpg',
+        imageUrl: 'assets/product_images/mug_white_real.jpg',
       );
     }
     if (normName.contains('تابلوه')) {
@@ -116,14 +116,14 @@ class CategoryModel {
       return const _CategoryPreset(
         icon: Icons.workspace_premium_rounded,
         gradientColors: [Color(0xFF495057), Color(0xFF212529)],
-        imageUrl: 'assets/product_images/certificate.jpg',
+        imageUrl: 'assets/product_images/cert_navy_gold.jpg',
       );
     }
     if (normName.contains('ميدالي')) {
       return const _CategoryPreset(
         icon: Icons.military_tech_rounded,
         gradientColors: [Color(0xFF6C757D), Color(0xFF343A40)],
-        imageUrl: 'assets/product_images/keychains.jpg',
+        imageUrl: 'assets/product_images/keychain_soft_photo.jpg',
       );
     }
     if (normName.contains('درع') || normName.contains('دروع')) {
@@ -140,11 +140,11 @@ class CategoryModel {
         imageUrl: 'assets/product_images/tshirts.jpg',
       );
     }
-    if (normName.contains('محافظ') || normName.contains('محفظه')) {
+    if (normName.contains('محافظ') || normName.contains('محفظه') || normName.contains('محفظ')) {
       return const _CategoryPreset(
         icon: Icons.account_balance_wallet_rounded,
         gradientColors: [Color(0xFF343A40), Color(0xFF0A0A0A)],
-        imageUrl: 'assets/product_images/desk_stand_gold_wood.jpg',
+        imageUrl: 'assets/product_images/wallet_engraved_group.jpg',
       );
     }
     if (normName.contains('علم') || normName.contains('اعلام')) {
