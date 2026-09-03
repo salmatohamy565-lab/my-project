@@ -456,34 +456,71 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   }
 
   Widget _buildSmartImage(String? imagePath, {BoxFit fit = BoxFit.contain, double? width, double? height, IconData? fallbackIcon}) {
-    if (imagePath == null || imagePath.isEmpty) {
-      return _buildPlaceholderIcon(fallbackIcon);
+    if (imagePath == null || imagePath.trim().isEmpty) {
+      return _buildFallback(fallbackIcon);
     }
-    if (imagePath.startsWith('assets/')) {
-      final filename = imagePath.split('/').last;
-      final serverUrl = '${ApiService().baseUrl}/static/product_images/$filename';
-      return Image.network(
-        serverUrl,
+    final trimmedPath = imagePath.trim();
+
+    // 1. Direct local asset image
+    if (trimmedPath.startsWith('assets/')) {
+      return Image.asset(
+        trimmedPath,
         fit: fit,
         width: width,
         height: height,
-        errorBuilder: (_, __, ___) => Image.asset(
-          imagePath,
-          fit: fit,
-          width: width,
-          height: height,
-          errorBuilder: (_, __, ___) => _buildPlaceholderIcon(fallbackIcon),
-        ),
+        gaplessPlayback: true,
+        errorBuilder: (_, __, ___) => _buildFallback(fallbackIcon),
       );
     }
-    final fullUrl = imagePath.startsWith('http') ? imagePath : ApiService().baseUrl + imagePath;
+
+    // 2. Network image or filename
+    final filename = trimmedPath.split('/').last;
+    final fullUrl = trimmedPath.startsWith('http://') || trimmedPath.startsWith('https://')
+        ? trimmedPath
+        : 'https://qqsjlkrzeleothumkknu.supabase.co/storage/v1/object/public/product_images/$filename';
+
     return Image.network(
       fullUrl,
       fit: fit,
       width: width,
       height: height,
-      errorBuilder: (_, __, ___) => _buildPlaceholderIcon(fallbackIcon),
+      gaplessPlayback: true,
+      errorBuilder: (_, __, ___) => Image.asset(
+        'assets/product_images/$filename',
+        fit: fit,
+        width: width,
+        height: height,
+        gaplessPlayback: true,
+        errorBuilder: (_, __, ___) => _buildFallback(fallbackIcon),
+      ),
     );
+  }
+
+  Widget _buildFallback(IconData? fallbackIcon) {
+    if (widget.category.imageUrl.isNotEmpty) {
+      if (widget.category.imageUrl.startsWith('assets/')) {
+        return Image.asset(
+          widget.category.imageUrl,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => _buildPlaceholderIcon(fallbackIcon),
+        );
+      } else {
+        final catFilename = widget.category.imageUrl.split('/').last;
+        final catUrl = widget.category.imageUrl.startsWith('http')
+            ? widget.category.imageUrl
+            : 'https://qqsjlkrzeleothumkknu.supabase.co/storage/v1/object/public/product_images/$catFilename';
+        return Image.network(
+          catUrl,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => Image.asset(
+            'assets/product_images/$catFilename',
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => _buildPlaceholderIcon(fallbackIcon),
+          ),
+        );
+      }
+    }
+    return _buildPlaceholderIcon(fallbackIcon);
   }
 
   Widget _buildPlaceholderIcon(IconData? icon) {
