@@ -40,6 +40,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
   CategoryModel? _selectedCategory;
   SubcategoryModel? _formSelectedSubcategory;
   File? _selectedImage;
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageName;
   int? _editingProductId;
   bool _showForm = false;
 
@@ -64,6 +66,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
       _editingProductId = null;
       _formSelectedSubcategory = null;
       _selectedImage = null;
+      _selectedImageBytes = null;
+      _selectedImageName = null;
       _nameController.clear();
       _descController.clear();
       _priceController.clear();
@@ -72,10 +76,20 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 
   Future<void> _pickImage() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
-    if (result != null && result.files.single.path != null) {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (result != null && result.files.isNotEmpty) {
+      final picked = result.files.single;
       setState(() {
-        _selectedImage = File(result.files.single.path!);
+        _selectedImageBytes = picked.bytes;
+        _selectedImageName = picked.name;
+        if (picked.path != null && !kIsWeb) {
+          _selectedImage = File(picked.path!);
+        } else {
+          _selectedImage = null;
+        }
       });
     }
   }
@@ -124,6 +138,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
         desc,
         price,
         _selectedImage,
+        imageBytes: _selectedImageBytes,
+        imageName: _selectedImageName,
         categoryId: categoryId,
         subcategoryId: subcategoryId,
       );
@@ -133,6 +149,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
         desc,
         price,
         _selectedImage,
+        imageBytes: _selectedImageBytes,
+        imageName: _selectedImageName,
         categoryId: categoryId,
         subcategoryId: subcategoryId,
       );
@@ -992,11 +1010,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     SizedBox(width: 10.w),
                     Expanded(
                       child: Text(
-                        _selectedImage != null
-                            ? _selectedImage!.path.split(Platform.pathSeparator).last
-                            : 'اختر صورة للمنتج (اختياري)',
+                        _selectedImageName != null
+                            ? _selectedImageName!
+                            : (_selectedImage != null
+                                ? _selectedImage!.path.split(RegExp(r'[\\/]')).last
+                                : 'اختر صورة للمنتج (اختياري)'),
                         style: AppStyles.bodyDefault.copyWith(
-                          color: _selectedImage != null ? Colors.white : AppColors.textMuted,
+                          color: (_selectedImageName != null || _selectedImage != null) ? Colors.white : AppColors.textMuted,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),

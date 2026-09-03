@@ -1055,6 +1055,8 @@ class ApiService {
     String description,
     double price,
     File? imageFile, {
+    Uint8List? imageBytes,
+    String? imageName,
     int? categoryId,
     int? subcategoryId,
     bool isOffer = false,
@@ -1064,20 +1066,27 @@ class ApiService {
   }) async {
     try {
       String? imageUrl;
-      if (imageFile != null && imageFile.existsSync()) {
+      Uint8List? bytesToUpload = imageBytes;
+      if (bytesToUpload == null && imageFile != null && !kIsWeb) {
+        try {
+          if (imageFile.existsSync()) {
+            bytesToUpload = await imageFile.readAsBytes();
+          }
+        } catch (_) {}
+      }
+
+      if (bytesToUpload != null && bytesToUpload.isNotEmpty) {
         try {
           final fileName = 'product_${DateTime.now().millisecondsSinceEpoch}.jpg';
-          final bytes = await imageFile.readAsBytes();
           await Supabase.instance.client.storage
               .from('product_images')
-              .uploadBinary(fileName, bytes, fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true));
+              .uploadBinary(fileName, bytesToUpload, fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true));
 
           imageUrl = Supabase.instance.client.storage
               .from('product_images')
               .getPublicUrl(fileName);
         } catch (uploadErr) {
           print('[SUPABASE STORAGE UPLOAD NOTICE] $uploadErr');
-          imageUrl = imageFile.path.split('/').last.split('\\').last;
         }
       }
 
@@ -1127,6 +1136,8 @@ class ApiService {
     String description,
     double price,
     File? imageFile, {
+    Uint8List? imageBytes,
+    String? imageName,
     int? categoryId,
     int? subcategoryId,
     bool? isOffer,
@@ -1136,20 +1147,27 @@ class ApiService {
   }) async {
     try {
       String? imageUrl;
-      if (imageFile != null && imageFile.existsSync()) {
+      Uint8List? bytesToUpload = imageBytes;
+      if (bytesToUpload == null && imageFile != null && !kIsWeb) {
+        try {
+          if (imageFile.existsSync()) {
+            bytesToUpload = await imageFile.readAsBytes();
+          }
+        } catch (_) {}
+      }
+
+      if (bytesToUpload != null && bytesToUpload.isNotEmpty) {
         try {
           final fileName = 'product_${DateTime.now().millisecondsSinceEpoch}.jpg';
-          final bytes = await imageFile.readAsBytes();
           await Supabase.instance.client.storage
               .from('product_images')
-              .uploadBinary(fileName, bytes, fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true));
+              .uploadBinary(fileName, bytesToUpload, fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true));
 
           imageUrl = Supabase.instance.client.storage
               .from('product_images')
               .getPublicUrl(fileName);
         } catch (uploadErr) {
           print('[SUPABASE STORAGE UPLOAD NOTICE] $uploadErr');
-          imageUrl = imageFile.path.split('/').last.split('\\').last;
         }
       }
 

@@ -35,6 +35,8 @@ class _AdminOffersScreenState extends State<AdminOffersScreen> with SingleTicker
 
   CategoryModel? _selectedCategory;
   File? _selectedImage;
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageName;
   bool _isSaving = false;
 
   @override
@@ -61,6 +63,8 @@ class _AdminOffersScreenState extends State<AdminOffersScreen> with SingleTicker
   void _resetNewOfferForm() {
     setState(() {
       _selectedImage = null;
+      _selectedImageBytes = null;
+      _selectedImageName = null;
       _selectedCategory = null;
       _nameController.clear();
       _descController.clear();
@@ -72,10 +76,20 @@ class _AdminOffersScreenState extends State<AdminOffersScreen> with SingleTicker
   }
 
   Future<void> _pickImage() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
-    if (result != null && result.files.single.path != null) {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (result != null && result.files.isNotEmpty) {
+      final picked = result.files.single;
       setState(() {
-        _selectedImage = File(result.files.single.path!);
+        _selectedImageBytes = picked.bytes;
+        _selectedImageName = picked.name;
+        if (picked.path != null && !kIsWeb) {
+          _selectedImage = File(picked.path!);
+        } else {
+          _selectedImage = null;
+        }
       });
     }
   }
@@ -108,6 +122,8 @@ class _AdminOffersScreenState extends State<AdminOffersScreen> with SingleTicker
       desc,
       offerPrice,
       _selectedImage,
+      imageBytes: _selectedImageBytes,
+      imageName: _selectedImageName,
       categoryId: _selectedCategory?.id,
       isOffer: true,
       originalPrice: origPrice ?? (offerPrice * 1.25),
@@ -649,12 +665,17 @@ class _AdminOffersScreenState extends State<AdminOffersScreen> with SingleTicker
                   borderRadius: BorderRadius.circular(12.r),
                   border: Border.all(color: AppColors.primaryAccent.withOpacity(0.3), style: BorderStyle.solid),
                 ),
-                child: _selectedImage != null
+                child: _selectedImageBytes != null
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(12.r),
-                        child: Image.file(_selectedImage!, fit: BoxFit.cover, width: double.infinity),
+                        child: Image.memory(_selectedImageBytes!, fit: BoxFit.cover, width: double.infinity),
                       )
-                    : Column(
+                    : (_selectedImage != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(12.r),
+                            child: Image.file(_selectedImage!, fit: BoxFit.cover, width: double.infinity),
+                          )
+                        : Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.add_photo_alternate_outlined, size: 36.r, color: AppColors.primaryAccent),
