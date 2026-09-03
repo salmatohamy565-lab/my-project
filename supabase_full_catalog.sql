@@ -60,6 +60,43 @@ ALTER TABLE public.products ADD COLUMN IF NOT EXISTS offer_discount VARCHAR(50);
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS offer_details TEXT;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS image_url TEXT;
 
+-- 5.1 Update orders table with all required mobile & dashboard columns
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS customer_address TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_proof_url TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS items_json TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS user_name VARCHAR(100);
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS user_phone VARCHAR(50);
+
+-- 5.2 Update tasks table columns
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS assigned_by INTEGER REFERENCES public.users(id) ON DELETE SET NULL;
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+-- 5.3 Update notifications table columns
+ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS type VARCHAR(50) DEFAULT 'info';
+
+-- 5.4 Update users table columns (password column for direct login fallback)
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password VARCHAR(255);
+UPDATE public.users SET password = '78945612300' WHERE LOWER(username) = 'bola';
+UPDATE public.users SET password = 'admin123' WHERE LOWER(username) IN ('eman', 'admin');
+UPDATE public.users SET password = 'emp123' WHERE LOWER(username) IN ('malak', 'salma', 'dieved', 'abdelkreem');
+
+-- 5.5 Enable Supabase Realtime for instant alerts
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
+EXCEPTION WHEN OTHERS THEN
+    NULL;
+END;
+$$;
+
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+EXCEPTION WHEN OTHERS THEN
+    NULL;
+END;
+$$;
+
 -- 6. Enable RLS and add public access policies for all new tables
 
 
